@@ -1,5 +1,8 @@
-# Recency-Weighted Multi-Horizon Forecast Disagreement (RWMFD)
+# Forecast Disagreement Anomaly Score (FDAS)
 ## Ground-Truth-Free Anomaly Detection for Multivariate Time Series
+
+A recency-weighted multi-horizon forecast-disagreement score for
+multivariate time-series anomaly detection.
 
 A forecasting-based anomaly detection method that scores each timestep $t$
 purely from the model's own multi-horizon forecast disagreement —

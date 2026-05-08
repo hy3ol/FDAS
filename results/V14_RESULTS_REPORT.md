@@ -1,4 +1,5 @@
-# V14 — Recency-Weighted Multi-Horizon Forecast Disagreement (RWMFD)
+# V14 — Forecast Disagreement Anomaly Score (FDAS)
+*(formerly RWMFD; recency-weighted multi-horizon forecast disagreement.)*
 ## 종합 평가 리포트 — Full-Series TSB-AD-M Aligned
 
 **작성일**: 2026-05-08
@@ -10,7 +11,7 @@
 
 ## 1. 핵심 요약
 
-V13 의 GT-free 점수 (Recency-Weighted Multi-Horizon Forecast Disagreement) 의 정의·코드는 그대로 두고, **평가 프로토콜만 TSB-AD-M 벤치마크와 정합**시킨 vintage. 변경점:
+V13 의 GT-free 점수 (FDAS — recency-weighted multi-horizon forecast disagreement) 의 정의·코드는 그대로 두고, **평가 프로토콜만 TSB-AD-M 벤치마크와 정합**시킨 vintage. 변경점:
 
 1. **평가 도메인**: test-only → train + test 풀 시리즈 (글로벌 인덱싱).
 2. **00_filter 의존성 제거**: 199 → 200 (MSL_id_3 추가, V13 에서 train 너무 짧아 filter 미달이었던 케이스).

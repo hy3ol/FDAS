@@ -1,4 +1,5 @@
-# V13 — Recency-Weighted Multi-Horizon Forecast Disagreement (RWMFD)
+# V13 — Forecast Disagreement Anomaly Score (FDAS)
+*(formerly RWMFD; recency-weighted multi-horizon forecast disagreement.)*
 ## 종합 평가 리포트
 
 **작성일**: 2026-05-07
