@@ -11,8 +11,9 @@ __pycache__/
 .DS_Store
 
 # Datasets (TSB-AD-M CSVs) — see README for download
-# (Local symlink or copy lives at datasets/ but is not tracked)
-datasets/
+# (Local symlink or copy lives at `datasets` but is not tracked)
+# No trailing slash so this matches a regular dir, a symlink, or a file.
+datasets
 
 # Dataset-prep intermediates
 data/
