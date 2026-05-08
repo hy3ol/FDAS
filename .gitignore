@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.ipynb_checkpoints/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Datasets (TSB-AD-M CSVs) — see README for download
+# (Local symlink or copy lives at datasets/ but is not tracked)
+datasets/
+
+# Dataset-prep intermediates
+data/
+
+# Trained checkpoints (large; ~5 GB across 200 datasets)
+# Host externally (Hugging Face / Zenodo) and link from README.
+models/
+
+# Per-dataset prediction / score artifacts (large)
+# Reproducible from checkpoints + datasets — not tracked.
+results/*/predictions_*.npy
+results/*/scores.parquet
+results/*/scores.csv
+results/*/scores_per_ch.npz
+results/*/test_labels.npy
+results/*/inference_metadata.json
+results/*/bundle_meta.json
+
+# Per-key training logs
+run_logs/
+results/04_score_compute_log.csv
+
+# Top-level temp / scratch
+*.swp
+*~
+
+# Tracked (do not gitignore these — listed for clarity):
+#   scripts/                                        — production pipeline
+#   ablations/scripts/                              — experiments
+#   ablations/results/*.csv                         — ablation summaries
+#   results/04_metrics/per_dataset_metrics.csv      — main result
+#   results/04_metrics/metrics_tsb_format.csv       — TSB-AD-M format
+#   results/05_cross_dataset/                       — cross-dataset stats
+#   results/figures/                                — paper figures
+#   results/V13_RESULTS_REPORT.md
+#   results/V14_RESULTS_REPORT.md

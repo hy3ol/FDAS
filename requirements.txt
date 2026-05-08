@@ -1,0 +1,28 @@
+# Deep Learning Framework
+torch>=2.2.0
+
+# Data Processing
+pandas>=2.0.0
+numpy>=1.24.0
+scikit-learn>=1.3.0
+scipy>=1.11.0
+
+# Visualization
+matplotlib>=3.8.0
+seaborn>=0.13.0
+
+# Forecasting backbone (iTransformer ops)
+einops>=0.7.0
+
+# I/O
+pyarrow>=14.0.0      # parquet support for pandas (results/{key}/scores.parquet)
+tqdm>=4.66.0
+
+# ── External: TSB-AD evaluation library ──────────────────────────────
+# Provides range-based AD metrics (VUS-PR, VUS-ROC, AUC-PR, AUC-ROC,
+# Standard-F1, PA-F1, etc.) used by scripts/05_metrics.py.
+#
+# Not on PyPI. Install from source:
+#   git clone https://github.com/TheDatumOrg/TSB-AD
+#   pip install -e ./TSB-AD
+# (Or sibling clone + PYTHONPATH=.../TSB-AD)
