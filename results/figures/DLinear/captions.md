@@ -1,0 +1,5 @@
+**Figure 1.** Cross-dataset relationship between forecasting accuracy and anomaly detection performance. Each point represents one dataset; X-axis shows the 1-step Normal MSE (raw value) and Y-axis shows the AUROC of forecast divergence $D_w$. The Pearson correlation $r = -0.228$ ($p = 0.00608$, $N = 144$ datasets) supports the hypothesis that forecasting accuracy and detection performance are systematically related. Dashed line indicates random baseline (AUROC = 0.5).
+
+**Figure 2.** Per-timestep score trajectories for representative datasets (best / median / worst by AUROC). For each dataset the forecast divergence $D_w(t)$ (blue, left axis) and baseline 1-step prediction error (red, right axis) are shown over time. Gray-shaded regions indicate ground-truth anomaly intervals.
+
+**Figure 3.** Cross-dataset AUROC analysis. (a) Distribution of $D_w$ AUROC across dataset families. (b) Paired comparison of $D_w$ versus baseline AUROC. $D_w$ outperforms the baseline in 62 of 144 datasets (mean $\Delta$AUROC = -0.041).

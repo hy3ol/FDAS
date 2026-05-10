@@ -1,0 +1,45 @@
+\documentclass[border=2pt]{standalone}
+
+\usepackage{booktabs}
+\usepackage{graphicx}
+
+\begin{document}
+
+\renewcommand{\arraystretch}{1.05}
+\setlength{\tabcolsep}{2.5pt}
+\small
+
+\begin{tabular}{l|ccccccccccccccccc}
+\toprule
+\textbf{Method} & \textbf{CATSv2} & \textbf{CreditCard} & \textbf{Daphnet} & \textbf{Exathlon} & \textbf{GECCO} & \textbf{GHL} & \textbf{Genesis} & \textbf{LTDB} & \textbf{MITDB} & \textbf{MSL} & \textbf{OPP} & \textbf{PSM} & \textbf{SMAP} & \textbf{SMD} & \textbf{SVDB} & \textbf{SWaT} & \textbf{TAO} \\
+\midrule
+CNN                       & 0.08 & 0.02 & 0.21 & 0.68 & 0.03 & 0.02 & 0.10 & \underline{0.33} & \underline{0.14} & \underline{0.35} & 0.16 & \underline{0.22} & 0.19 & \underline{0.35} & 0.19 & 0.41 & \textbf{1.00} \\
+OmniAnomaly               & 0.04 & 0.02 & \textbf{0.34} & \underline{0.84} & 0.02 & \textbf{0.07} & 0.00 & \textbf{0.44} & 0.11 & 0.22 & 0.18 & 0.16 & 0.12 & 0.17 & \textbf{0.35} & 0.15 & \underline{0.81} \\
+PCA                       & 0.12 & \textbf{0.10} & 0.13 & \textbf{0.95} & \textbf{0.20} & 0.01 & 0.02 & 0.24 & 0.07 & 0.15 & \textbf{0.30} & 0.16 & 0.09 & \textbf{0.36} & 0.11 & \underline{0.45} & \textbf{1.00} \\
+LSTMAD                    & 0.04 & 0.02 & \underline{0.31} & \underline{0.82} & 0.02 & \underline{0.06} & 0.04 & 0.30 & 0.09 & 0.22 & 0.17 & \underline{0.24} & 0.16 & \underline{0.33} & 0.15 & 0.16 & \underline{0.99} \\
+USAD                      & 0.04 & 0.02 & \textbf{0.34} & \underline{0.84} & 0.02 & \underline{0.06} & 0.00 & \underline{0.41} & \underline{0.12} & 0.23 & 0.18 & 0.19 & 0.11 & 0.16 & \underline{0.32} & 0.15 & \underline{0.81} \\
+AutoEncoder               & 0.06 & 0.03 & 0.13 & \underline{0.91} & 0.05 & 0.05 & 0.01 & 0.21 & 0.04 & 0.22 & 0.14 & \textbf{0.28} & 0.13 & \underline{0.30} & 0.06 & \textbf{0.58} & \textbf{1.00} \\
+KMeansAD                  & 0.12 & 0.02 & \underline{0.30} & 0.37 & 0.06 & 0.03 & \textbf{0.89} & \underline{0.41} & 0.06 & \textbf{0.44} & 0.06 & \underline{0.21} & \textbf{0.38} & \textbf{0.36} & 0.20 & 0.16 & \underline{0.86} \\
+CBLOF                     & 0.06 & 0.03 & 0.10 & \underline{0.86} & 0.03 & 0.02 & 0.02 & 0.20 & 0.04 & 0.21 & 0.14 & 0.19 & 0.14 & 0.22 & 0.07 & 0.29 & \textbf{1.00} \\
+MCD                       & 0.13 & 0.06 & 0.14 & \underline{0.80} & 0.03 & 0.01 & 0.06 & 0.21 & 0.04 & 0.23 & 0.17 & \underline{0.26} & 0.10 & 0.26 & 0.07 & \underline{0.54} & \textbf{1.00} \\
+OCSVM                     & 0.08 & 0.02 & 0.06 & \underline{0.83} & 0.04 & 0.04 & 0.08 & 0.20 & 0.04 & 0.22 & 0.12 & 0.19 & 0.12 & \underline{0.28} & 0.06 & \underline{0.44} & \underline{0.81} \\
+Donut                     & 0.07 & 0.02 & 0.17 & 0.66 & 0.03 & 0.05 & 0.18 & 0.26 & \underline{0.12} & 0.30 & 0.15 & 0.20 & 0.18 & 0.19 & 0.11 & \underline{0.44} & \underline{0.75} \\
+RobustPCA                 & 0.04 & 0.02 & 0.06 & \underline{0.77} & 0.02 & 0.03 & 0.00 & 0.23 & 0.04 & 0.22 & 0.13 & 0.12 & 0.07 & 0.10 & 0.08 & 0.12 & \textbf{1.00} \\
+FITS                      & 0.13 & 0.02 & \underline{0.33} & 0.63 & 0.03 & 0.01 & 0.10 & 0.23 & 0.05 & 0.17 & 0.05 & 0.13 & 0.08 & 0.17 & 0.10 & 0.15 & \underline{0.78} \\
+OFA                       & 0.13 & 0.02 & \underline{0.31} & 0.58 & 0.04 & 0.01 & 0.22 & 0.29 & 0.06 & 0.14 & 0.05 & 0.17 & 0.08 & 0.17 & 0.12 & 0.12 & \underline{0.78} \\
+EIF                       & 0.06 & 0.02 & 0.15 & 0.41 & 0.04 & 0.02 & 0.06 & 0.19 & 0.04 & 0.18 & 0.10 & 0.18 & 0.13 & \underline{0.32} & 0.07 & 0.32 & \underline{0.89} \\
+COPOD                     & 0.05 & 0.05 & 0.11 & 0.40 & 0.04 & 0.03 & 0.08 & 0.21 & 0.04 & 0.21 & 0.17 & 0.20 & 0.10 & 0.19 & 0.07 & 0.31 & \underline{0.99} \\
+IForest                   & 0.05 & 0.03 & 0.13 & 0.35 & 0.04 & 0.05 & 0.04 & 0.21 & 0.04 & 0.21 & 0.18 & 0.19 & 0.09 & 0.26 & 0.07 & 0.39 & \underline{0.93} \\
+HBOS                      & 0.05 & 0.04 & 0.15 & 0.32 & 0.04 & 0.04 & 0.08 & 0.21 & 0.04 & 0.23 & 0.17 & 0.17 & 0.09 & 0.25 & 0.07 & 0.30 & \underline{0.83} \\
+TimesNet                  & 0.07 & 0.02 & \underline{0.27} & 0.42 & 0.03 & 0.01 & 0.02 & 0.27 & 0.07 & 0.17 & 0.06 & 0.14 & 0.09 & 0.14 & 0.11 & 0.14 & \underline{0.79} \\
+KNN                       & 0.07 & 0.02 & 0.25 & 0.33 & 0.11 & 0.01 & 0.04 & 0.19 & 0.04 & 0.18 & 0.06 & 0.12 & 0.12 & \underline{0.30} & 0.06 & 0.11 & \underline{0.78} \\
+TranAD                    & 0.04 & 0.02 & \underline{0.31} & 0.10 & 0.02 & \underline{0.06} & 0.04 & 0.26 & 0.07 & 0.24 & 0.16 & \underline{0.23} & 0.09 & \underline{0.30} & 0.12 & 0.15 & \underline{0.81} \\
+LOF                       & 0.05 & 0.02 & 0.11 & 0.16 & 0.13 & 0.01 & 0.08 & 0.19 & 0.04 & 0.14 & 0.10 & 0.15 & 0.09 & 0.16 & 0.06 & 0.15 & \underline{0.79} \\
+AnomalyTransformer        & 0.03 & 0.02 & 0.07 & 0.10 & 0.02 & 0.03 & 0.01 & 0.21 & 0.05 & 0.12 & 0.07 & \underline{0.21} & 0.06 & 0.07 & 0.08 & 0.18 & \underline{0.77} \\
+\midrule
+\textbf{FDAS iTransformer} & \textbf{0.34} & 0.04 & 0.20 & 0.64 & \underline{0.19} & 0.01 & 0.09 & \underline{0.38} & \textbf{0.15} & 0.26 & 0.13 & 0.12 & \underline{0.33} & 0.26 & 0.19 & 0.22 & \underline{0.80} \\
+\textbf{FDAS DLinear}     & 0.15 & 0.05 & \underline{0.30} & \underline{0.83} & 0.06 & 0.03 & 0.31 & \underline{0.36} & 0.10 & 0.21 & 0.16 & 0.14 & 0.22 & \underline{0.28} & 0.18 & 0.39 & \underline{0.80} \\
+\bottomrule
+\end{tabular}
+
+\end{document}
