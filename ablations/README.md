@@ -3,9 +3,8 @@
 Experimental scripts that **do not run as part of the main pipeline**.
 They reproduce the per-component analyses cited in the V13/V14 results
 reports. Each script reads the same artifacts produced by the
-production pipeline (`../../results/{key}/predictions_*.npy`,
-`scores_per_ch.npz`) and writes its own output CSV under
-`./results/`.
+production pipeline (`../../results/<dataset_key>/<backbone>/predictions_*.npy`,
+`scores_per_ch.npz`) and writes its own output CSV under `./results/`.
 
 All ablation scripts append `../../scripts/` to `sys.path` so they can
 import `score_utils`, `artifact_paths`, etc. Run them from the
@@ -15,6 +14,14 @@ repository root:
 cd <repo-root>
 python ablations/scripts/<script_name>.py
 ```
+
+> **Backbone scope.** These ablation scripts were written before the
+> backbone-pluggable refactor. They currently read iTransformer
+> artifacts from the legacy path resolution; results files have no
+> per-backbone suffix. If you want to re-run them on a different
+> backbone, point the path helpers (or the script's hardcoded glob) at
+> `results/<dataset_key>/<backbone>/...` and rename the output CSV
+> accordingly to avoid clobbering the iTransformer baseline.
 
 ## Scripts
 
@@ -43,6 +50,8 @@ The production score reported in the main paper is `D_w_z` =
 > Per-channel recency-weighted forecast variance → channel z-score
 > against train baseline (μ_c, σ_c) → channel-max aggregation.
 
-It is computed by `scripts/04_score_compute.py` (no flag needed) and
-stored in `results/{key}/scores.parquet` under the column `D_w_z`. The
-ablation scripts here exist only to justify that choice.
+It is computed by `scripts/04_score_compute.py` (no flag needed, but
+respects `--backbone <name>`) and stored in
+`results/<dataset_key>/<backbone>/scores.parquet` under the column
+`D_w_z`. The ablation scripts here exist only to justify that choice
+within the iTransformer baseline.
