@@ -192,49 +192,88 @@ def get_current_dataset_key():
     return _resolve_dataset_key_from_metadata(metadata)
 
 
-def get_models_dir(dataset_key=None, create=True):
+def _resolve_backbone(backbone: str | None) -> str:
+    """Default backbone is iTransformer (V13 legacy). Lazy import avoids
+    circular dependency with `model` package, which itself may import this
+    module via tooling."""
+    if backbone:
+        return backbone
+    try:
+        from model import DEFAULT_BACKBONE  # type: ignore
+        return DEFAULT_BACKBONE
+    except Exception:
+        return "iTransformer"
+
+
+def get_models_dir(dataset_key=None, backbone: str | None = None, create=True):
+    """Per-(dataset, backbone) checkpoints directory.
+
+    New layout: models/<dataset_key>/<backbone>/{best_model.pth, ...}
+    Legacy layout (pre-refactor): models/<dataset_key>/{best_model.pth, ...}
+
+    A one-time migration script (scripts/migrate_to_backbone_layout.sh) moves
+    legacy iTransformer artifacts into the new layout. After migration, only
+    the new layout is consulted.
+    """
     key = dataset_key or get_current_dataset_key()
-    models_dir = MODELS_ROOT / key
+    bb = _resolve_backbone(backbone)
+    models_dir = MODELS_ROOT / key / bb
     if create:
         models_dir.mkdir(parents=True, exist_ok=True)
     return models_dir
 
 
-def get_dataset_results_dir(dataset_key=None, create=True):
-    """Per-dataset folder. Holds predictions, scores, trajectories, heatmaps, figures."""
+def get_dataset_results_dir(dataset_key=None, backbone: str | None = None, create=True):
+    """Per-(dataset, backbone) results folder.
+
+    Holds predictions, scores, trajectories, heatmaps, figures.
+    Layout: results/<dataset_key>/<backbone>/...
+    bundle_meta.json (dataset-level metadata) lives at results/<dataset_key>/.
+    """
     key = dataset_key or get_current_dataset_key()
-    out_dir = RESULTS_ROOT / key
+    bb = _resolve_backbone(backbone)
+    out_dir = RESULTS_ROOT / key / bb
     if create:
         out_dir.mkdir(parents=True, exist_ok=True)
     return out_dir
 
 
+def get_dataset_root_dir(dataset_key=None, create=True):
+    """Per-dataset root (backbone-agnostic). Holds bundle_meta.json."""
+    key = dataset_key or get_current_dataset_key()
+    out = RESULTS_ROOT / key
+    if create:
+        out.mkdir(parents=True, exist_ok=True)
+    return out
+
+
 # Backwards-compatible alias used by 03_inference.py
-def get_outputs_dir(dataset_key=None, create=True):
-    return get_dataset_results_dir(dataset_key=dataset_key, create=create)
+def get_outputs_dir(dataset_key=None, backbone: str | None = None, create=True):
+    return get_dataset_results_dir(dataset_key=dataset_key, backbone=backbone, create=create)
 
 
-def get_dataset_figures_dir(dataset_key=None, create=True):
-    d = get_dataset_results_dir(dataset_key=dataset_key, create=create) / 'figures'
+def get_dataset_figures_dir(dataset_key=None, backbone: str | None = None, create=True):
+    d = get_dataset_results_dir(dataset_key=dataset_key, backbone=backbone,
+                                create=create) / 'figures'
     if create:
         d.mkdir(parents=True, exist_ok=True)
     return d
 
 
-def get_dataset_score_path(dataset_key=None) -> Path:
-    return get_dataset_results_dir(dataset_key=dataset_key) / SCORES_FILENAME
+def get_dataset_score_path(dataset_key=None, backbone: str | None = None) -> Path:
+    return get_dataset_results_dir(dataset_key=dataset_key, backbone=backbone) / SCORES_FILENAME
 
 
-def get_dataset_per_horizon_path(dataset_key=None) -> Path:
-    return get_dataset_results_dir(dataset_key=dataset_key) / PER_HORIZON_FILENAME
+def get_dataset_per_horizon_path(dataset_key=None, backbone: str | None = None) -> Path:
+    return get_dataset_results_dir(dataset_key=dataset_key, backbone=backbone) / PER_HORIZON_FILENAME
 
 
-def get_dataset_traj_path(dataset_key=None) -> Path:
-    return get_dataset_results_dir(dataset_key=dataset_key) / TRAJ_FILENAME
+def get_dataset_traj_path(dataset_key=None, backbone: str | None = None) -> Path:
+    return get_dataset_results_dir(dataset_key=dataset_key, backbone=backbone) / TRAJ_FILENAME
 
 
-def get_dataset_heatmap_path(dataset_key=None) -> Path:
-    return get_dataset_results_dir(dataset_key=dataset_key) / HEATMAP_FILENAME
+def get_dataset_heatmap_path(dataset_key=None, backbone: str | None = None) -> Path:
+    return get_dataset_results_dir(dataset_key=dataset_key, backbone=backbone) / HEATMAP_FILENAME
 
 
 def get_results_root(create=True):

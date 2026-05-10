@@ -33,9 +33,18 @@ from artifact_paths import RESULTS_ROOT, get_dataset_results_dir
 from score_utils import find_anomaly_regions, load_score_frame
 
 
-METRICS_PATH = RESULTS_ROOT / "04_metrics" / "per_dataset_metrics.csv"
-FIG_DIR = RESULTS_ROOT / "figures"
+METRICS_DIR = RESULTS_ROOT / "04_metrics"
+# FIG_DIR and STATS_PATH are now per-backbone (resolved in main()):
+#   results/figures/<backbone>/...
+#   results/<backbone>/statistics_table.md
+FIG_DIR_BASE = RESULTS_ROOT / "figures"
+# Module-level mutable refs that save_figure() and other helpers read.
+# main() rebinds these to the per-backbone variants before any plotting.
+FIG_DIR = FIG_DIR_BASE
 STATS_PATH = RESULTS_ROOT / "statistics_table.md"
+# Set by main() so figure helpers (figure_score_timeseries via _load_scores)
+# resolve per-dataset score paths under the right backbone.
+CURRENT_BACKBONE = "iTransformer"
 
 # V14: 비교 대상이 GT-using `base` → production `D_w_z` (= z_train_max)
 # 로 변경. 각 metric 의 두번째 컬럼은 컨벤션 상 `metric_base` 라는 이름의
@@ -601,7 +610,9 @@ def figure_main_per_family(
 # Figure 2 — Score time series (3 cases)
 # ──────────────────────────────────────────────────────────────
 def _load_scores(dataset_id: str) -> pd.DataFrame:
-    return load_score_frame(get_dataset_results_dir(dataset_id) / "scores")
+    return load_score_frame(
+        get_dataset_results_dir(dataset_id, backbone=CURRENT_BACKBONE) / "scores"
+    )
 
 
 def figure_score_timeseries(
@@ -939,6 +950,10 @@ def write_statistics_table(
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        "--backbone", type=str, default="iTransformer",
+        help="Backbone whose per_dataset_metrics CSV to plot. Default: iTransformer.",
+    )
+    parser.add_argument(
         "--min-eval-anomalies", type=int, default=0,
         help="Drop datasets whose n_eval_anomalies < this threshold before plotting. "
              "Default 0 = include all that survived 05_metrics.",
@@ -986,23 +1001,30 @@ def main():
     )
     args = parser.parse_args()
     # Wire --no-pdf into the module-level switch used by save_figure().
-    global SAVE_PDF
+    global SAVE_PDF, FIG_DIR, STATS_PATH, CURRENT_BACKBONE
     SAVE_PDF = not args.no_pdf
+    # Per-backbone output paths — rebind the module-level FIG_DIR/STATS_PATH
+    # used by save_figure() and other helpers.
+    FIG_DIR = FIG_DIR_BASE / args.backbone
+    STATS_PATH = RESULTS_ROOT / args.backbone / "statistics_table.md"
+    CURRENT_BACKBONE = args.backbone
+    metrics_path = METRICS_DIR / f"per_dataset_metrics__{args.backbone}.csv"
+
     metric_dw, metric_base, metric_label, metric_slug = METRIC_COLS[args.metric]
     _suffix_window = "" if args.normal_window == "target" else "_strict"
     _suffix_agg = "_median" if args.channel_agg == "median" else ""
     mse_col = f"normal_mse{_suffix_window}{_suffix_agg}"
     mae_col = f"normal_mae{_suffix_window}{_suffix_agg}"
 
-    if not METRICS_PATH.exists():
-        sys.exit(f"Missing {METRICS_PATH}. Run 05_metrics.py first.")
+    if not metrics_path.exists():
+        sys.exit(f"Missing {metrics_path}. Run `05_metrics.py --backbone {args.backbone}` first.")
     apply_paper_style()
 
-    df = pd.read_csv(METRICS_PATH)
+    df = pd.read_csv(metrics_path)
     df = df[df["status"] == "ok"].copy()
     if metric_dw not in df.columns or metric_base not in df.columns:
         sys.exit(
-            f"Metric '{args.metric}' not found in {METRICS_PATH}. "
+            f"Metric '{args.metric}' not found in {metrics_path}. "
             f"Re-run 05_metrics.py without --skip-vus."
         )
     if mse_col not in df.columns:

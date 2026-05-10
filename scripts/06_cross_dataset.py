@@ -31,8 +31,8 @@ sys.path.append(str(Path(__file__).resolve().parent))
 from artifact_paths import RESULTS_ROOT
 
 
-METRICS_PATH = RESULTS_ROOT / "04_metrics" / "per_dataset_metrics.csv"
-OUT_DIR = RESULTS_ROOT / "05_cross_dataset"
+METRICS_DIR = RESULTS_ROOT / "04_metrics"
+OUT_DIR_BASE = RESULTS_ROOT / "05_cross_dataset"
 
 
 def _to_float(v):
@@ -55,6 +55,10 @@ METRIC_COLS = {
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        "--backbone", type=str, default="iTransformer",
+        help="Backbone whose per_dataset_metrics CSV to read. Default: iTransformer.",
+    )
+    parser.add_argument(
         "--min-eval-anomalies", type=int, default=0,
         help="Drop datasets whose n_eval_anomalies < this threshold "
              "(uses per_dataset_metrics.csv column). Default 0 = include all.",
@@ -66,14 +70,17 @@ def main():
     args = parser.parse_args()
     metric_prod, metric_base, metric_label = METRIC_COLS[args.metric]
 
-    if not METRICS_PATH.exists():
-        sys.exit(f"Missing {METRICS_PATH}. Run 05_metrics.py first.")
-    df = pd.read_csv(METRICS_PATH)
+    metrics_path = METRICS_DIR / f"per_dataset_metrics__{args.backbone}.csv"
+    out_dir = OUT_DIR_BASE / args.backbone
+
+    if not metrics_path.exists():
+        sys.exit(f"Missing {metrics_path}. Run `05_metrics.py --backbone {args.backbone}` first.")
+    df = pd.read_csv(metrics_path)
     df = df[df["status"] == "ok"].copy()
 
     if metric_prod not in df.columns or metric_base not in df.columns:
         sys.exit(
-            f"Metric '{args.metric}' not found in {METRICS_PATH}. "
+            f"Metric '{args.metric}' not found in {metrics_path}. "
             f"Re-run 05_metrics.py without --skip-vus."
         )
 
@@ -185,10 +192,11 @@ def main():
                 main_corr[f"within_family_spearman_{err_col}"] = float(np.tanh(z_avg))
                 main_corr[f"within_family_n_families_{err_col}"] = int(len(rhos))
 
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    out_dir.mkdir(parents=True, exist_ok=True)
     out_name = "results.json" if args.metric == "auroc" else f"results_{args.metric}.json"
-    out_path = OUT_DIR / out_name
+    out_path = out_dir / out_name
     payload = {
+        "backbone": args.backbone,
         "metric": args.metric,
         "metric_label": metric_label,
         "min_eval_anomalies_cutoff": int(args.min_eval_anomalies),

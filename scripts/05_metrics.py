@@ -77,7 +77,7 @@ def _variant_col(metric: str, variant: str) -> str:
 
 
 METRICS_COLUMNS = [
-    "dataset_id", "family", "test_length",
+    "dataset_id", "family", "backbone", "test_length",
     "n_eval_rows", "n_anomaly_events", "n_eval_anomalies",
     "n_label_pos", "n_label_neg",
     "normal_mse", "normal_mae",
@@ -108,8 +108,8 @@ METRICS_COLUMNS = [
 ]
 
 
-def _list_all_datasets_with_scores() -> list[dict]:
-    """Enumerate every dataset under RESULTS_ROOT that has scores.parquet/.csv.
+def _list_all_datasets_with_scores(backbone: str) -> list[dict]:
+    """Enumerate every dataset whose <backbone>/ subdir has scores.parquet/.csv.
 
     V13 evaluates every dataset (no filter step) — TSB-AD-M-aligned
     convention.
@@ -118,7 +118,8 @@ def _list_all_datasets_with_scores() -> list[dict]:
     for d in sorted(RESULTS_ROOT.iterdir()):
         if not d.is_dir():
             continue
-        if not ((d / "scores.parquet").exists() or (d / "scores.csv").exists()):
+        bb_dir = d / backbone
+        if not ((bb_dir / "scores.parquet").exists() or (bb_dir / "scores.csv").exists()):
             continue
         rows.append({
             "dataset_id": d.name,
@@ -175,16 +176,17 @@ def process_one(
     n_anomaly_events: int, n_eval_anomalies: int,
     skip_vus: bool = False,
     agg_mode: str = "max",
+    backbone: str = "iTransformer",
 ) -> dict:
     rec = {col: "" for col in METRICS_COLUMNS}
     rec.update({
-        "dataset_id": dataset_id, "family": family,
+        "dataset_id": dataset_id, "family": family, "backbone": backbone,
         "n_anomaly_events": n_anomaly_events,
         "n_eval_anomalies": n_eval_anomalies,
         "status": "ok", "error": "",
     })
 
-    score_path = get_dataset_results_dir(dataset_id) / "scores"
+    score_path = get_dataset_results_dir(dataset_id, backbone=backbone) / "scores"
     try:
         score_frame = load_score_frame(score_path)
     except FileNotFoundError as exc:
@@ -192,14 +194,14 @@ def process_one(
         rec["error"] = str(exc)
         return rec
 
-    if not has_required_prediction_artifacts(dataset_id):
+    if not has_required_prediction_artifacts(dataset_id, backbone=backbone):
         rec["status"] = "skip"
         rec["error"] = "no_prediction_artifacts"
         return rec
 
     try:
         bundle = prepare_dataset_bundle(dataset_id)
-        preds, _, _ = load_prediction_artifacts(dataset_id)
+        preds, _, _ = load_prediction_artifacts(dataset_id, backbone=backbone)
 
         # V13 full-series metrics — TSB-AD-M-aligned.
         # 04_score_compute.py produces scores.parquet with global timestep
@@ -219,7 +221,7 @@ def process_one(
             D_w[ts_global] = score_frame["D_w"].to_numpy(dtype=np.float64)
         else:
             try:
-                per_ch = load_per_channel_scores(get_dataset_results_dir(dataset_id))
+                per_ch = load_per_channel_scores(get_dataset_results_dir(dataset_id, backbone=backbone))
                 D_w_c = per_ch["D_w_c"]
                 pc_t = per_ch["t"].astype(np.int64)
                 D_w[pc_t] = _AGG_FUNCS[agg_mode](D_w_c)
@@ -314,10 +316,10 @@ def process_one(
             from score_utils import (
                 compute_train_baseline_stats as _compute_baseline,
             )
-            per_ch_path = get_dataset_results_dir(dataset_id) / "scores_per_ch.npz"
-            train_pred_path = get_dataset_results_dir(dataset_id) / "predictions_train.npy"
+            per_ch_path = get_dataset_results_dir(dataset_id, backbone=backbone) / "scores_per_ch.npz"
+            train_pred_path = get_dataset_results_dir(dataset_id, backbone=backbone) / "predictions_train.npy"
             if per_ch_path.exists() and train_pred_path.exists():
-                pc = load_per_channel_scores(get_dataset_results_dir(dataset_id))
+                pc = load_per_channel_scores(get_dataset_results_dir(dataset_id, backbone=backbone))
                 Dwc = pc["D_w_c"]                                # (T_eval, C)
                 t_idx = pc["t"].astype(np.int64)
                 base_train = _compute_baseline(
@@ -439,17 +441,22 @@ def _process_one_worker(args_tuple) -> tuple[str, dict]:
 
     Top-level (not closure) so it can be pickled across ProcessPoolExecutor.
     """
-    dataset_id, family, n_evt, n_eval, skip_vus, agg_mode = args_tuple
+    dataset_id, family, n_evt, n_eval, skip_vus, agg_mode, backbone = args_tuple
     rec = process_one(
         dataset_id, family, n_evt, n_eval,
         skip_vus=skip_vus,
         agg_mode=agg_mode,
+        backbone=backbone,
     )
     return (dataset_id, rec)
 
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--backbone", type=str, default="iTransformer",
+        help="Backbone whose scores to evaluate. Default: iTransformer.",
+    )
     parser.add_argument("--only", nargs="*", default=None)
     parser.add_argument(
         "--only-missing", action="store_true",
@@ -481,11 +488,13 @@ def main():
     args = parser.parse_args()
 
     METRICS_DIR.mkdir(parents=True, exist_ok=True)
-    suffix = "" if args.agg == "max" else f"_{args.agg}"
-    out_path = METRICS_DIR / f"per_dataset_metrics{suffix}.csv"
+    # Per-backbone CSVs so multiple backbones don't clobber each other.
+    bb_suffix = f"__{args.backbone}"
+    agg_suffix = "" if args.agg == "max" else f"_{args.agg}"
+    out_path = METRICS_DIR / f"per_dataset_metrics{bb_suffix}{agg_suffix}.csv"
 
-    rows = _list_all_datasets_with_scores()
-    print(f"  enumerating {len(rows)} dataset(s) with score artifacts")
+    rows = _list_all_datasets_with_scores(args.backbone)
+    print(f"  backbone={args.backbone}; enumerating {len(rows)} dataset(s) with scores")
     if args.only:
         only = set(args.only)
         rows = [r for r in rows if r["dataset_id"] in only]
@@ -495,7 +504,7 @@ def main():
         print(f"  applied --min-eval-anomalies={args.min_eval_anomalies} "
               f"→ {len(rows)} dataset(s) remain")
 
-    tsb_path = out_path.parent / f"metrics_tsb_format{suffix}.csv"
+    tsb_path = out_path.parent / f"metrics_tsb_format{bb_suffix}{agg_suffix}.csv"
 
     # --only-missing: seed both files with already-ok rows so the on-disk
     # state is consistent before we start appending new ones.
@@ -573,6 +582,7 @@ def main():
                     int(r.get("n_eval_anomalies") or 0),
                     skip_vus=args.skip_vus,
                     agg_mode=args.agg,
+                    backbone=args.backbone,
                 )
                 _write(rec)
                 print(_emit(i, len(rows), ds_id, rec), flush=True)
@@ -582,7 +592,7 @@ def main():
                     r["dataset_id"], r["family"],
                     int(r.get("n_anomaly_events") or 0),
                     int(r.get("n_eval_anomalies") or 0),
-                    args.skip_vus, args.agg,
+                    args.skip_vus, args.agg, args.backbone,
                 )
                 for r in rows
             ]

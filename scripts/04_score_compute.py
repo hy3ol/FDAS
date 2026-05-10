@@ -53,7 +53,7 @@ from artifact_paths import RESULTS_ROOT as _RESULTS_ROOT_FOR_TRAIN
 
 
 LOG_COLUMNS = [
-    "dataset_id", "family",
+    "dataset_id", "family", "backbone",
     "test_length", "n_pred", "n_eval_rows",
     "n_skipped_nan", "elapsed_sec",
     "D_w_min", "D_w_median", "D_w_max",
@@ -72,18 +72,19 @@ def _percentile_safe(arr: np.ndarray, q: float) -> float:
     return float(np.percentile(fin, q))
 
 
-def process_one(dataset_id: str, family: str) -> dict:
+def process_one(dataset_id: str, family: str, backbone: str) -> dict:
     record = {col: "" for col in LOG_COLUMNS}
-    record.update({"dataset_id": dataset_id, "family": family, "status": "ok", "error": ""})
+    record.update({"dataset_id": dataset_id, "family": family,
+                   "status": "ok", "error": "", "backbone": backbone})
 
-    if not has_required_prediction_artifacts(dataset_id):
+    if not has_required_prediction_artifacts(dataset_id, backbone=backbone):
         record["status"] = "skip"
         record["error"] = "no_prediction_artifacts"
         return record
 
     try:
         bundle = prepare_dataset_bundle(dataset_id)
-        preds, labels_saved, meta = load_prediction_artifacts(dataset_id)
+        preds, labels_saved, meta = load_prediction_artifacts(dataset_id, backbone=backbone)
 
         # Sanity: labels saved by inference must equal bundle labels (post-split)
         if labels_saved.shape[0] != bundle.test_labels.shape[0]:
@@ -130,8 +131,8 @@ def process_one(dataset_id: str, family: str) -> dict:
         )
 
         # Train region — predictions_train.npy is required for full-series eval.
-        val_pred_path = _RESULTS_ROOT_FOR_TRAIN / dataset_id / "predictions_val.npy"
-        train_pred_path = _RESULTS_ROOT_FOR_TRAIN / dataset_id / "predictions_train.npy"
+        val_pred_path = _RESULTS_ROOT_FOR_TRAIN / dataset_id / backbone / "predictions_val.npy"
+        train_pred_path = _RESULTS_ROOT_FOR_TRAIN / dataset_id / backbone / "predictions_train.npy"
         preds_train = np.load(train_pred_path) if train_pred_path.exists() else None
 
         if preds_train is not None and preds_train.shape[0] > 0:
@@ -228,7 +229,7 @@ def process_one(dataset_id: str, family: str) -> dict:
 
         elapsed = time.time() - t0
 
-        out_dir = get_dataset_results_dir(dataset_id)
+        out_dir = get_dataset_results_dir(dataset_id, backbone=backbone)
         score_path = save_table_with_fallback(
             score_frame, out_dir / "scores.parquet"
         )
@@ -267,8 +268,8 @@ def process_one(dataset_id: str, family: str) -> dict:
         return record
 
 
-def _list_all_datasets_with_predictions() -> list[dict]:
-    """Enumerate every dataset under RESULTS_ROOT that has predictions_test.npy.
+def _list_all_datasets_with_predictions(backbone: str) -> list[dict]:
+    """Enumerate every dataset whose <backbone>/ subdir has predictions_test.npy.
 
     V13 evaluates every dataset (no filter step) — TSB-AD-M-aligned eval
     convention.
@@ -279,7 +280,7 @@ def _list_all_datasets_with_predictions() -> list[dict]:
     for d in sorted(RESULTS_ROOT.iterdir()):
         if not d.is_dir():
             continue
-        if not (d / "predictions_test.npy").exists():
+        if not (d / backbone / "predictions_test.npy").exists():
             continue
         # family is best-effort (resolved later by prepare_dataset_bundle)
         rows.append({"dataset_id": d.name, "family": d.name.split("_")[0]})
@@ -291,20 +292,24 @@ def _process_one_with_key(args_tuple) -> tuple[str, dict]:
 
     Top-level (not closure) so it can be pickled across ProcessPoolExecutor.
     """
-    dataset_id, family = args_tuple
-    rec = process_one(dataset_id, family)
+    dataset_id, family, backbone = args_tuple
+    rec = process_one(dataset_id, family, backbone)
     return (dataset_id, rec)
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        "--backbone", type=str, default="iTransformer",
+        help="Backbone whose predictions to score. Default: iTransformer.",
+    )
+    parser.add_argument(
         "--only", nargs="*", default=None,
         help="Limit to specific dataset keys.",
     )
     parser.add_argument(
         "--only-missing", action="store_true",
-        help="Skip datasets whose scores.parquet/.csv already exists. "
+        help="Skip datasets whose <backbone>/scores.parquet/.csv already exists. "
              "Useful for incremental re-runs after adding new datasets.",
     )
     parser.add_argument(
@@ -317,8 +322,8 @@ def main():
 
     set_all_seeds(42)
 
-    rows = _list_all_datasets_with_predictions()
-    print(f"  enumerating {len(rows)} dataset(s) with prediction artifacts")
+    rows = _list_all_datasets_with_predictions(args.backbone)
+    print(f"  backbone={args.backbone}; enumerating {len(rows)} dataset(s) with predictions")
 
     if args.only:
         only = set(args.only)
@@ -327,12 +332,12 @@ def main():
         from artifact_paths import RESULTS_ROOT as _RR
         before = len(rows)
         rows = [r for r in rows
-                if not ((_RR / r["dataset_id"] / "scores.parquet").exists()
-                        or (_RR / r["dataset_id"] / "scores.csv").exists())]
+                if not ((_RR / r["dataset_id"] / args.backbone / "scores.parquet").exists()
+                        or (_RR / r["dataset_id"] / args.backbone / "scores.csv").exists())]
         print(f"  --only-missing: {before} → {len(rows)} dataset(s) (skipping already-done)")
 
     workers = max(1, min(int(args.workers), len(rows))) if rows else 1
-    print(f"04_score_compute — processing {len(rows)} dataset(s), workers={workers}")
+    print(f"04_score_compute [{args.backbone}] — processing {len(rows)} dataset(s), workers={workers}")
     summary: list[dict] = []
     n_ok, n_skip, n_fail = 0, 0, 0
 
@@ -352,7 +357,7 @@ def main():
 
     if workers == 1:
         for i, r in enumerate(rows, 1):
-            rec = process_one(r["dataset_id"], r["family"])
+            rec = process_one(r["dataset_id"], r["family"], args.backbone)
             summary.append(rec)
             _report(i, len(rows), r["dataset_id"], rec)
     else:
@@ -361,7 +366,8 @@ def main():
         results: dict[int, dict] = {}
         with ProcessPoolExecutor(max_workers=workers) as ex:
             futs = {
-                ex.submit(_process_one_with_key, (r["dataset_id"], r["family"])): r["dataset_id"]
+                ex.submit(_process_one_with_key,
+                         (r["dataset_id"], r["family"], args.backbone)): r["dataset_id"]
                 for r in rows
             }
             for done_count, fut in enumerate(as_completed(futs), 1):
@@ -370,7 +376,8 @@ def main():
                 _report(done_count, len(rows), dataset_id, rec)
         summary = [results[i] for i in range(len(rows))]
 
-    log_path = RESULTS_ROOT / "04_score_compute_log.csv"
+    # Log path is per-backbone so concurrent backbones don't clobber each other
+    log_path = RESULTS_ROOT / f"04_score_compute_log__{args.backbone}.csv"
     with open(log_path, "w", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=LOG_COLUMNS)
         writer.writeheader()

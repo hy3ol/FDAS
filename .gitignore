@@ -24,6 +24,8 @@ models/
 
 # Per-dataset prediction / score artifacts (large)
 # Reproducible from checkpoints + datasets — not tracked.
+# Both old layout (results/<dataset>/file) and new backbone-pluggable
+# layout (results/<dataset>/<backbone>/file) are covered.
 results/*/predictions_*.npy
 results/*/scores.parquet
 results/*/scores.csv
@@ -31,10 +33,19 @@ results/*/scores_per_ch.npz
 results/*/test_labels.npy
 results/*/inference_metadata.json
 results/*/bundle_meta.json
+# New layout (post-backbone-refactor): one extra path level for <backbone>.
+results/*/*/predictions_*.npy
+results/*/*/scores.parquet
+results/*/*/scores.csv
+results/*/*/scores_per_ch.npz
+results/*/*/test_labels.npy
+results/*/*/inference_metadata.json
 
 # Per-key training logs
 run_logs/
 results/04_score_compute_log.csv
+# Per-backbone score-compute logs (one per --backbone run)
+results/04_score_compute_log__*.csv
 
 # Top-level temp / scratch
 *.swp

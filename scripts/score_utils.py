@@ -209,15 +209,21 @@ def prepare_dataset_bundle(dataset_key: str) -> DatasetBundle:
     )
 
 
-def has_required_prediction_artifacts(dataset_key: str) -> bool:
-    d = RESULTS_ROOT / dataset_key
+def has_required_prediction_artifacts(dataset_key: str, backbone: str = "iTransformer") -> bool:
+    """True if results/<dataset_key>/<backbone>/ has the required files.
+
+    Backbone defaults to iTransformer (V13 legacy). Pass --backbone explicitly
+    in 04/05 callers to switch.
+    """
+    d = RESULTS_ROOT / dataset_key / backbone
     return all((d / f).exists() for f in [
         "predictions_test.npy", "test_labels.npy", "inference_metadata.json"
     ])
 
 
-def load_prediction_artifacts(dataset_key: str) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
-    d = RESULTS_ROOT / dataset_key
+def load_prediction_artifacts(dataset_key: str, backbone: str = "iTransformer"
+                              ) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
+    d = RESULTS_ROOT / dataset_key / backbone
     preds = np.load(d / "predictions_test.npy")
     labels = np.load(d / "test_labels.npy")
     with open(d / "inference_metadata.json") as fh:
