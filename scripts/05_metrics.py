@@ -18,7 +18,7 @@ import warnings
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
-
+import numpy as np
 from sklearn.exceptions import UndefinedMetricWarning
 from sklearn.metrics import roc_auc_score
 

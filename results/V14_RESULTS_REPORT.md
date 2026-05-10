@@ -134,7 +134,7 @@ $$
     └── 저장: predictions_{train,val,test}.npy, shape (N, H, C)          │
                                   │
                                   ▼
-  04_score_compute.py             │   ★ V14: --all-datasets, full-series 글로벌 인덱싱
+  04_score_compute.py             │   ★ V14: 전수 처리(필터 없음), full-series 글로벌 인덱싱
     ├── compute_backward_score_per_channel on TRAIN region                │
     ├── compute_backward_score_per_channel on TEST region                 │
     ├── 글로벌 인덱싱으로 concat (test 영역 t += test_start)             │
@@ -164,7 +164,7 @@ $$
                                   │
                                   ▼
   05_metrics.py / 06_cross_dataset.py / 07_visualization.py              │
-    ★ V14: --all-datasets, bundle.full_labels (length T_full),           │
+    ★ V14: 전수 처리(필터 없음), bundle.full_labels (length T_full),     │
       get_metrics(score_full, full_label, slidingWindow)                 │
     (오프라인 평가: AUROC, VUS-PR, AUC-PR 등)                            │
 ```
@@ -403,23 +403,27 @@ V13/
 │   ├── 02_train.py                  — iTransformer 학습 (use_norm=True, patience=3)
 │   ├── 03_inference.py              — train/val/test predictions (확장 길이 T-L)
 │   ├── 04_score_compute.py          — D_w + D_w_z, 풀시리즈 글로벌 인덱싱
-│   │                                  (--all-datasets 옵션, baseline=train)
-│   ├── 05_metrics.py                — TSB-AD metric, 풀시리즈 라벨 사용
-│   │                                  (--all-datasets 옵션)
-│   ├── score_utils.py               — 핵심 수식 (V13 동일)
+│   │                                  (전수 처리, baseline=train)
+│   ├── 05_metrics.py                — TSB-AD metric, 풀시리즈 라벨 사용 (전수 처리)
+│   ├── 06_cross_dataset.py          — D_w_z (production) vs D_w (raw_max) 비교
+│   ├── 07_visualization.py          — 그림 산출
+│   └── score_utils.py               — 핵심 수식 (V13 동일)
+├── ablations/scripts/
 │   ├── _ablation_zscore_agg_compare.py — V14 신규: 4-way agg 비교 ablation
 │   ├── compare_agg_normalize.py     — 9-variant harness (V14 미실행, 재현 가능)
 │   └── _ablation_no_drop.py         — Drop ablation (V14 미실행, V13 결과 인용)
-├── results/04_metrics/
-│   ├── per_dataset_metrics.csv      — V14 200 datasets × (D_w, D_w_z × 6 metric)
-│   ├── _ablation_zscore_agg_compare.csv  — V14 4-way agg 비교 결과
-│   ├── metrics_tsb_format.csv       — TSB-AD-M 벤치 포맷 호환
+├── results/
+│   ├── 04_metrics/
+│   │   ├── per_dataset_metrics.csv  — V14 200 datasets × (D_w, D_w_z × 6 metric)
+│   │   └── metrics_tsb_format.csv   — TSB-AD-M 벤치 포맷 호환
 │   ├── V13_RESULTS_REPORT.md        — V13 vintage (test-only, 9 variant)
 │   └── V14_RESULTS_REPORT.md        — 이 문서 (full-series, 4-way agg)
+├── ablations/results/
+│   └── ablation_zscore_agg_compare.csv  — V14 4-way agg 비교 결과
 └── models/{key}/checkpoint.pth      — best-snapshot (V14 동일 모델 사용)
 ```
 
-V14 풀시리즈 평가 재현:
+V14 풀시리즈 평가 재현 (모든 스크립트가 기본으로 prediction 가진 데이터셋 전수를 처리 — 별도 플래그 불필요):
 
 ```bash
 cd V13/
@@ -427,18 +431,18 @@ cd V13/
 # 200 데이터셋 학습 + 추론 (이미 끝나있다면 스킵)
 python scripts/run_all.py --all-keys --skip-existing
 
-# 풀시리즈 평가 (00_filter 우회)
-python scripts/04_score_compute.py --all-datasets        # 200 데이터셋, ~5분 (workers=8)
-python scripts/05_metrics.py --all-datasets              # 200 데이터셋, ~15분
+# 풀시리즈 평가 (전수 처리; 필터 단계 없음)
+python scripts/04_score_compute.py                       # 200 데이터셋, ~5분 (workers=8)
+python scripts/05_metrics.py                             # 200 데이터셋, ~15분
 python scripts/06_cross_dataset.py
 python scripts/07_visualization.py
 
-# V14 신규: 4-way 채널 집계 비교
-python scripts/_ablation_zscore_agg_compare.py           # 200 데이터셋, ~10분 (workers=8)
+# V14 신규: 4-way 채널 집계 비교 (ablation 디렉토리)
+python ablations/scripts/_ablation_zscore_agg_compare.py # 200 데이터셋, ~10분 (workers=8)
 
 # (선택) V13 9-variant / no-drop 결과를 V14 풀시리즈에서 재현
-python scripts/compare_agg_normalize.py                   # ~10분
-python scripts/_ablation_no_drop.py                       # ~5분
+python ablations/scripts/compare_agg_normalize.py        # ~10분
+python ablations/scripts/_ablation_no_drop.py            # ~5분
 ```
 
 ---

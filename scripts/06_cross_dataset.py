@@ -1,12 +1,17 @@
 """
-06_cross_dataset.py — V12 v7.0 cross-dataset analysis.
+06_cross_dataset.py — V14 cross-dataset analysis (full-series, GT-free).
 
 Reads results/04_metrics/per_dataset_metrics.csv and computes:
-  - Main: Spearman ρ + Pearson r between (Normal MSE, AUROC(D_w))
+  - Main: Spearman ρ + Pearson r between (Normal MSE, <metric>(D_w_z))
           (using log10 MSE for Pearson per v7.0 §5.1)
-  - Sub : Paired comparison D_w vs base
-          - Wilcoxon signed-rank test on (auroc_D_w − auroc_base)
-          - Win count / mean Δ AUROC
+  - Sub : Paired comparison D_w_z (production, z_train_max) vs D_w (raw_max)
+          - Wilcoxon signed-rank test on (D_w_z − D_w)
+          - Win count / mean Δ
+
+V14 schema: the GT-using `*_base` columns were removed. The legacy "D_w vs
+base" comparison is repurposed to "D_w_z vs D_w" — i.e. production
+(z_train_max) vs raw_max baseline, which is the headline finding of
+V14_RESULTS_REPORT §1.
 
 Output: results/05_cross_dataset/results.json
 """
@@ -37,11 +42,13 @@ def _to_float(v):
         return float("nan")
 
 
+# (production_col, baseline_col, label).
+# Production = D_w_z (z_train_max), baseline = D_w (raw_max).
 METRIC_COLS = {
-    "auroc": ("auroc_D_w", "auroc_base", "AUROC"),
-    "vus_pr": ("vus_pr_D_w", "vus_pr_base", "VUS-PR"),
-    "vus_roc": ("vus_roc_D_w", "vus_roc_base", "VUS-ROC"),
-    "auc_pr": ("auc_pr_D_w", "auc_pr_base", "AUC-PR"),
+    "auroc": ("auroc_D_w_z", "auroc_D_w", "AUROC"),
+    "vus_pr": ("vus_pr_D_w_z", "vus_pr_D_w", "VUS-PR"),
+    "vus_roc": ("vus_roc_D_w_z", "vus_roc_D_w", "VUS-ROC"),
+    "auc_pr": ("auc_pr_D_w_z", "auc_pr_D_w", "AUC-PR"),
 }
 
 
@@ -57,14 +64,14 @@ def main():
         help="Detection metric to correlate with Normal MSE. Default: auroc.",
     )
     args = parser.parse_args()
-    metric_dw, metric_base, metric_label = METRIC_COLS[args.metric]
+    metric_prod, metric_base, metric_label = METRIC_COLS[args.metric]
 
     if not METRICS_PATH.exists():
         sys.exit(f"Missing {METRICS_PATH}. Run 05_metrics.py first.")
     df = pd.read_csv(METRICS_PATH)
     df = df[df["status"] == "ok"].copy()
 
-    if metric_dw not in df.columns or metric_base not in df.columns:
+    if metric_prod not in df.columns or metric_base not in df.columns:
         sys.exit(
             f"Metric '{args.metric}' not found in {METRICS_PATH}. "
             f"Re-run 05_metrics.py without --skip-vus."
@@ -77,12 +84,12 @@ def main():
         print(f"  applied --min-eval-anomalies={args.min_eval_anomalies}: "
               f"{before} → {len(df)} dataset(s)")
 
-    for col in ("normal_mse", metric_dw, metric_base):
+    for col in ("normal_mse", metric_prod, metric_base):
         df[col] = df[col].apply(_to_float)
 
     main_mask = (
         np.isfinite(df["normal_mse"])
-        & np.isfinite(df[metric_dw])
+        & np.isfinite(df[metric_prod])
         & (df["normal_mse"] > 0)
     )
     main_df = df[main_mask]
@@ -90,9 +97,9 @@ def main():
 
     main_corr = {}
     if n_main >= 3:
-        rho, p_rho = spearmanr(main_df["normal_mse"], main_df[metric_dw])
+        rho, p_rho = spearmanr(main_df["normal_mse"], main_df[metric_prod])
         log_mse = np.log10(main_df["normal_mse"].to_numpy())
-        r, p_r = pearsonr(log_mse, main_df[metric_dw].to_numpy())
+        r, p_r = pearsonr(log_mse, main_df[metric_prod].to_numpy())
         main_corr = {
             "metric": args.metric,
             "spearman_rho": float(rho),
@@ -108,22 +115,22 @@ def main():
             "n_datasets": int(n_main),
         }
 
-    pair_mask = np.isfinite(df[metric_dw]) & np.isfinite(df[metric_base])
+    pair_mask = np.isfinite(df[metric_prod]) & np.isfinite(df[metric_base])
     pair_df = df[pair_mask]
     n_pair = len(pair_df)
     baseline_cmp: dict = {"metric": args.metric, "n_datasets": int(n_pair)}
     if n_pair >= 1:
-        diff = pair_df[metric_dw].to_numpy() - pair_df[metric_base].to_numpy()
-        n_dw_wins = int(np.sum(diff > 0))
+        diff = pair_df[metric_prod].to_numpy() - pair_df[metric_base].to_numpy()
+        n_prod_wins = int(np.sum(diff > 0))
         baseline_cmp.update({
-            "datasets_D_w_wins": f"{n_dw_wins}/{n_pair}",
-            "n_dw_wins": n_dw_wins,
+            "datasets_D_w_z_wins": f"{n_prod_wins}/{n_pair}",
+            "n_dwz_wins": n_prod_wins,
             "mean_delta": float(np.mean(diff)),
             "median_delta": float(np.median(diff)),
         })
         if n_pair >= 2 and not np.allclose(diff, 0):
             try:
-                W, p = wilcoxon(pair_df[metric_dw], pair_df[metric_base],
+                W, p = wilcoxon(pair_df[metric_prod], pair_df[metric_base],
                                 zero_method="wilcox", alternative="two-sided")
                 baseline_cmp.update({"wilcoxon_W": float(W), "wilcoxon_p": float(p)})
             except ValueError as exc:
@@ -137,25 +144,25 @@ def main():
                 df[c] = pd.to_numeric(df[c], errors="coerce")
         # Choose the same X column convention as the main analysis (MSE column)
         for fam, g in df.groupby("family"):
-            valid = g[np.isfinite(g[metric_dw])]
+            valid = g[np.isfinite(g[metric_prod])]
             if valid.empty:
                 continue
             entry = {
                 "family": fam,
                 "n": int(valid.shape[0]),
-                f"mean_{metric_dw}": float(valid[metric_dw].mean()),
-                f"median_{metric_dw}": float(valid[metric_dw].median()),
+                f"mean_{metric_prod}": float(valid[metric_prod].mean()),
+                f"median_{metric_prod}": float(valid[metric_prod].median()),
                 f"mean_{metric_base}": float(valid[metric_base].mean()),
-                "mean_delta": float((valid[metric_dw] - valid[metric_base]).mean()),
+                "mean_delta": float((valid[metric_prod] - valid[metric_base]).mean()),
             }
             # Within-family Spearman ρ vs Normal MSE / MAE (target + strict)
             for err_col in ("normal_mse", "normal_mae",
                             "normal_mse_strict", "normal_mae_strict"):
                 if err_col not in valid.columns:
                     continue
-                v = valid[[err_col, metric_dw]].dropna()
+                v = valid[[err_col, metric_prod]].dropna()
                 if len(v) >= 3:
-                    rho_f, p_f = spearmanr(v[err_col], v[metric_dw])
+                    rho_f, p_f = spearmanr(v[err_col], v[metric_prod])
                     entry[f"spearman_{err_col}"] = float(rho_f)
                     entry[f"p_{err_col}"] = float(p_f)
                     entry[f"n_{err_col}"] = int(len(v))
@@ -202,8 +209,8 @@ def main():
               f"(p={main_corr['pearson_p_log_mse']:.3g})")
     else:
         print(f"  Main correlation: {main_corr}")
-    if "n_dw_wins" in baseline_cmp:
-        print(f"  D_w wins: {baseline_cmp['datasets_D_w_wins']}, "
+    if "n_dwz_wins" in baseline_cmp:
+        print(f"  D_w_z wins (vs D_w): {baseline_cmp['datasets_D_w_z_wins']}, "
               f"mean Δ{metric_label} = {baseline_cmp['mean_delta']:+.3f}")
     return 0
 
