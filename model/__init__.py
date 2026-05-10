@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from .base import BackboneSpec
 from . import iTransformer as _itransformer
+from . import DLinear as _dlinear
 
 DEFAULT_BACKBONE = "iTransformer"
 
@@ -56,7 +57,33 @@ BACKBONES: dict[str, BackboneSpec] = {
         ],
         forward_signature="tsl",
     ),
-    # Future backbones (DLinear, PatchTST, TimesNet, ...) get appended here.
+    # ── DLinear (Zeng et al., AAAI 2023). ──────────────────────────────
+    # Vendored verbatim from cure-lab/LTSF-Linear (official authors' repo);
+    # see model/DLinear.py — no modifications. Decomposition kernel_size=25
+    # is hardcoded inside the upstream Model class (line 48 of DLinear.py)
+    # so it's not exposed as a Config field.
+    #
+    # forward_signature="x_only" because DLinear's forward takes only (x);
+    # the time-mark inputs of the TSL signature are unused. V13's
+    # `BackboneSpec.call_forward` dispatches accordingly.
+    "DLinear": BackboneSpec(
+        name="DLinear",
+        model_factory=lambda cfg: _dlinear.Model(cfg),
+        default_model_hps=dict(
+            individual=False,             # LTSF-Linear default (channel-shared linear)
+        ),
+        default_training_hps=dict(
+            batch_size=32,
+            learning_rate=5e-3,           # LTSF-Linear paper default (--learning_rate 0.005)
+            num_epochs=10,
+            patience=3,
+            optimizer="adam",
+            scheduler="none",
+        ),
+        extra_config_fields=["individual"],
+        forward_signature="x_only",
+    ),
+    # Future backbones (PatchTST, TimeMixer, TimeXer, ...) get appended here.
 }
 
 
