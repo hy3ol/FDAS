@@ -41,9 +41,9 @@ class TimeSeriesDataset(Dataset):
     def __len__(self):
         return self.length
 
-    def __getitem__(self, idx):
-        x = self.data[idx:idx + self.lookback]
-        y = self.data[idx + self.lookback:idx + self.lookback + self.pred_len]
+    def __getitem__(self, index):
+        x = self.data[index:index + self.lookback]
+        y = self.data[index + self.lookback:index + self.lookback + self.pred_len]
         # Dummy timestamps — TSL signature requires marks; backbones that
         # don't use marks (DLinear, etc.) ignore them via call_forward.
         x_mark = np.zeros((self.lookback, 1))
@@ -256,10 +256,10 @@ def train_model(backbone_name: str):
         'train_losses': train_losses,
         'val_losses': val_losses,
         'best_val_loss': float(best_val_loss),
-        'best_epoch': int(best_epoch),
+        'best_epoch': best_epoch,
         'epochs_trained': len(train_losses),
-        'early_stopped': bool(early_stopped),
-        'patience': int(config.patience),
+        'early_stopped': early_stopped,
+        'patience': config.patience,
     }
 
     with open(os.path.join(models_dir, 'training_history.json'), 'w') as f:

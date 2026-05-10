@@ -97,7 +97,7 @@ def load_and_prepare_data(dataset_key):
     required_span = LOOKBACK + PRED_LEN
 
     # Official split boundary from filename metadata.
-    official_train_end = min(int(metadata['train_size']), total_timesteps)
+    official_train_end = min(metadata['train_size'], total_timesteps)
     if official_train_end < required_span:
         raise ValueError(
             "Official train segment is shorter than the minimum required window span "
@@ -186,19 +186,20 @@ def load_and_prepare_data(dataset_key):
         'dataset_key': dataset_key,
         'dataset_relative_path': dataset_info['relative_path'],
         'dataset_source_path': str(data_path),
-        'num_channels': int(num_channels),
-        'train_size': int(len(train_data)),
-        'val_size': int(len(val_data)),
-        'test_size': int(len(test_data)),
-        'total_timesteps': int(total_timesteps),
+        'num_channels': num_channels,
+        'train_size': len(train_data),
+        'val_size': len(val_data),
+        'test_size': len(test_data),
+        'total_timesteps': total_timesteps,
         'anomaly_ratio': float(test_labels.mean()),
-        'first_anomaly_idx': int(first_anomaly_idx),
-        'official_train_end': int(official_train_end),
-        'train_end': int(train_end),
-        'train_val_end': int(train_val_end),
-        'val_start': int(val_start),
-        'test_start': int(test_start),
+        'first_anomaly_idx': first_anomaly_idx,
+        'official_train_end': official_train_end,
+        'train_end': train_end,
+        'train_val_end': train_val_end,
+        'val_start': val_start,
+        'test_start': test_start,
         'val_mode': 'overlap-tail' if uses_overlap_val else 'disjoint',
+        # numpy .sum() returns np.int64 — keep int() for JSON serialization
         'train_anomalies': int(train_labels.sum()),
         'val_anomalies': int(val_labels.sum()),
         'test_anomalies': int(test_labels.sum()),
@@ -221,14 +222,14 @@ def load_and_prepare_data(dataset_key):
     bundle_meta = {
         'dataset_key': dataset_key,
         'dataset_name': dataset_name,
-        'official_train_end': int(official_train_end),
-        'scaler_train_end': int(train_end),
-        'train_end': int(train_end),
-        'val_start': int(val_start),
-        'test_start': int(test_start),
+        'official_train_end': official_train_end,
+        'scaler_train_end': train_end,
+        'train_end': train_end,
+        'val_start': val_start,
+        'test_start': test_start,
         'val_mode': 'overlap-tail' if uses_overlap_val else 'disjoint',
-        'total_timesteps': int(total_timesteps),
-        'num_channels': int(num_channels),
+        'total_timesteps': total_timesteps,
+        'num_channels': num_channels,
         'lookback': LOOKBACK,
         'pred_len': PRED_LEN,
         'scaler_mean': scaler.mean_.tolist(),
