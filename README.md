@@ -270,13 +270,17 @@ artifacts are untouched, so you can compare side-by-side immediately.
 
 ## Reports
 
+- [`results/V15_RESULTS_REPORT.md`](results/V15_RESULTS_REPORT.md) —
+  **current vintage** (backbone-pluggable framework; iTransformer
+  results identical to V14, bit-for-bit verified).
 - [`results/V14_RESULTS_REPORT.md`](results/V14_RESULTS_REPORT.md) —
-  current vintage (full-series, 200 datasets, 4-way agg comparison).
+  full-series eval, 200 datasets, 4-way agg comparison.
 - [`results/V13_RESULTS_REPORT.md`](results/V13_RESULTS_REPORT.md) —
-  earlier vintage (test-only eval, 9-variant comparison).
+  earliest vintage (test-only eval, 9-variant comparison).
 
-Both reports are iTransformer-only. Cross-backbone reports will be
-added as new backbones are registered.
+All current results are iTransformer-only. Cross-backbone reports
+(DLinear, PatchTST, TimesNet, …) will be added as new backbones are
+registered in `model/__init__.py`.
 
 ## Citation
 
