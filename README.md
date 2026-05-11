@@ -54,9 +54,13 @@ prediction tensor that any registered backbone produces.
 ├── .gitignore                             — generated/large artifacts excluded
 │
 ├── model/                                 — backbone registry + implementations
-│   ├── __init__.py                        — BACKBONES dict (registry)
+│   ├── __init__.py                        — BACKBONES dict (5 registered)
 │   ├── base.py                            — BackboneSpec dataclass
-│   └── iTransformer.py                    — vendored, untouched
+│   ├── DLinear.py                         — vendored verbatim from LTSF-Linear
+│   ├── iTransformer/                      — vendored verbatim from TSL
+│   ├── PatchTST/                          — vendored verbatim from TSL
+│   ├── TimeMixer/                         — vendored verbatim from TSL
+│   └── TimesNet/                          — vendored verbatim from TSL
 ├── layers/                                — TSL standard layers (vendored)
 ├── utils/                                 — vendored helpers
 │
@@ -65,14 +69,13 @@ prediction tensor that any registered backbone produces.
 │   ├── config_factory.py                  — shared Config builder
 │   ├── score_utils.py                     — D_w, z-score, TSB-AD wrappers
 │   ├── 01_data_preparation.py             — split + StandardScaler + bundle_meta
-│   ├── 02_train.py                        — backbone training (--backbone)
-│   ├── 03_inference.py                    — train/val/test predictions (--backbone)
+│   ├── 02_train.py                        — backbone training (--backbone, --batch-size)
+│   ├── 03_inference.py                    — train/val/test predictions (--backbone, --batch-size)
 │   ├── 04_score_compute.py                — D_w + D_w_z (--backbone)
-│   ├── 05_metrics.py                      — TSB-AD-M metrics on full series
-│   ├── 06_cross_dataset.py                — cross-dataset summary stats
-│   ├── 07_visualization.py                — figures
+│   ├── 05_metrics.py                      — TSB-AD-M metrics on full series (--backbone)
+│   ├── 06_cross_dataset.py                — ad-hoc D_w vs D_w_z paired comparison (not in production pipeline)
 │   ├── run_all.py                         — end-to-end driver (--backbone)
-│   └── migrate_to_backbone_layout.py      — one-time mv from legacy layout
+│   └── migrate_to_backbone_layout.py      — one-shot legacy → per-backbone mv (kept for new-backbone bootstrap)
 │
 ├── ablations/                             — experimental scripts + outputs
 │   ├── README.md
@@ -94,12 +97,14 @@ prediction tensor that any registered backbone produces.
 │   │       ├── inference_metadata.json
 │   │       ├── scores.parquet             — D_w + D_w_z, per timestep
 │   │       └── scores_per_ch.npz          — per-channel D_w_c
-│   ├── 04_metrics/
-│   │   ├── per_dataset_metrics__<backbone>.csv  — main result CSV (200 × metrics)
-│   │   └── metrics_tsb_format__<backbone>.csv   — TSB-AD-M benchmark format
-│   ├── 05_cross_dataset/<backbone>/
-│   ├── figures/<backbone>/
-│   └── <backbone>/statistics_table.md
+│   ├── 04_metrics/<backbone>/
+│   │   ├── per_dataset_metrics.csv       — main result CSV (200 × metrics)
+│   │   └── metrics_tsb_format.csv        — TSB-AD-M benchmark format
+│   ├── 04_score_compute_log__<backbone>.csv  — score compute timing/status log
+│   ├── 05_cross_dataset/<backbone>/      — ad-hoc D_w vs D_w_z (legacy)
+│   └── 00_result_table/                  — paper-grade summary tables (LaTeX + PDF + PNG)
+│       ├── table_1/                      — overall 6-metric comparison
+│       └── table_2/                      — per-family VUS-PR comparison
 └── run_logs/<backbone>/                   — per-(backbone, key) training logs (gitignored)
 ```
 
@@ -179,21 +184,23 @@ python scripts/01_data_preparation.py --dataset-key Genesis
 python scripts/02_train.py                     # default --backbone iTransformer
 python scripts/03_inference.py
 
-# Score + metrics + figures (across every dataset that has predictions)
+# OOM mitigation for high-channel datasets (e.g. OPPORTUNITY = 248 channels)
+python scripts/02_train.py --backbone TimeMixer --batch-size 8
+python scripts/03_inference.py --backbone TimeMixer --batch-size 8
+
+# Score + metrics (production pipeline; across every dataset with predictions)
 python scripts/04_score_compute.py             # ~5 min  (workers=8)
-python scripts/05_metrics.py                   # ~15 min
-python scripts/06_cross_dataset.py
-python scripts/07_visualization.py
+python scripts/05_metrics.py                   # ~3 min
 ```
 
 ### Inspect main results
 
-`results/04_metrics/per_dataset_metrics__iTransformer.csv` has one row
-per dataset with the 6 TSB-AD-M metrics for the production score
-`D_w_z` (= `z_train_max`, the channel-z-scored, channel-max-aggregated
-$D_w$). When you run additional backbones the file naming pattern is
-`per_dataset_metrics__<backbone>.csv`, so per-backbone results never
-clobber each other.
+`results/04_metrics/<backbone>/per_dataset_metrics.csv` has one row per
+dataset with the 6 TSB-AD-M metrics for the production score `D_w_z`
+(= `z_train_max`, the channel-z-scored, channel-max-aggregated $D_w$).
+Each backbone has its own subdirectory, so per-backbone results never
+clobber each other. Aggregate paper-grade tables (overall + per-family)
+live in `results/00_result_table/table_{1,2}/`.
 
 ## Adding a new backbone
 
@@ -247,8 +254,13 @@ python scripts/run_all.py --analyze --backbone DLinear
 ```
 
 Results land in `results/<dataset_key>/DLinear/...` and
-`results/04_metrics/per_dataset_metrics__DLinear.csv`. iTransformer
+`results/04_metrics/DLinear/per_dataset_metrics.csv`. Other backbones'
 artifacts are untouched, so you can compare side-by-side immediately.
+
+**Currently registered**: DLinear, iTransformer, PatchTST, TimeMixer,
+TimesNet — all 5 trained and evaluated on the full 200-dataset TSB-AD-M
+benchmark. See [`results/00_result_table/`](results/00_result_table/)
+for the paper-grade comparison tables.
 
 ## Key design choices
 
@@ -270,17 +282,22 @@ artifacts are untouched, so you can compare side-by-side immediately.
 
 ## Reports
 
+- [`results/00_result_table/`](results/00_result_table/) — **current
+  paper-grade tables** (5 backbones × 200 datasets, LaTeX/PDF/PNG):
+  - `table_1/vuspr_table_1.{tex,pdf,png}` — overall 6-metric comparison
+    of FDAS (5 backbones) vs 23 TSB-AD-M baselines.
+  - `table_2/vuspr_table_2.{tex,pdf,png}` — per-family VUS-PR breakdown
+    (17 families).
 - [`results/V15_RESULTS_REPORT.md`](results/V15_RESULTS_REPORT.md) —
-  **current vintage** (backbone-pluggable framework; iTransformer
-  results identical to V14, bit-for-bit verified).
+  backbone-pluggable framework introduction (iTransformer reference,
+  bit-for-bit identical to V14).
 - [`results/V14_RESULTS_REPORT.md`](results/V14_RESULTS_REPORT.md) —
-  full-series eval, 200 datasets, 4-way agg comparison.
+  full-series eval, 200 datasets, 4-way agg comparison (iTransformer).
 - [`results/V13_RESULTS_REPORT.md`](results/V13_RESULTS_REPORT.md) —
   earliest vintage (test-only eval, 9-variant comparison).
 
-All current results are iTransformer-only. Cross-backbone reports
-(DLinear, PatchTST, TimesNet, …) will be added as new backbones are
-registered in `model/__init__.py`.
+Markings in the tables: **bold** = column max; `\underline{}` = ≥ 75 %
+of column max (excluding the bold entry).
 
 ## Citation
 

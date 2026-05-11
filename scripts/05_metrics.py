@@ -346,10 +346,10 @@ def main():
     )
     args = parser.parse_args()
 
-    METRICS_DIR.mkdir(parents=True, exist_ok=True)
-    # Per-backbone CSVs so multiple backbones don't clobber each other.
-    bb_suffix = f"__{args.backbone}"
-    out_path = METRICS_DIR / f"per_dataset_metrics{bb_suffix}.csv"
+    # Per-backbone subdir so multiple backbones don't clobber each other.
+    backbone_dir = METRICS_DIR / args.backbone
+    backbone_dir.mkdir(parents=True, exist_ok=True)
+    out_path = backbone_dir / "per_dataset_metrics.csv"
 
     rows = _list_all_datasets_with_scores(args.backbone)
     print(f"  backbone={args.backbone}; enumerating {len(rows)} dataset(s) with scores")
@@ -362,7 +362,7 @@ def main():
         print(f"  applied --min-eval-anomalies={args.min_eval_anomalies} "
               f"→ {len(rows)} dataset(s) remain")
 
-    tsb_path = out_path.parent / f"metrics_tsb_format{bb_suffix}.csv"
+    tsb_path = backbone_dir / "metrics_tsb_format.csv"
 
     # --only-missing: seed both files with already-ok rows so the on-disk
     # state is consistent before we start appending new ones.
