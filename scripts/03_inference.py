@@ -53,10 +53,11 @@ class SlidingWindowDataset(Dataset):
     range t ∈ [L+H-1, T-1].
     """
 
-    def __init__(self, data, lookback, pred_len):
+    def __init__(self, data, lookback, pred_len, mark_dim=1):
         self.data = data
         self.lookback = lookback
         self.pred_len = pred_len
+        self.mark_dim = mark_dim
         self.length = max(len(data) - lookback, 0)
 
     def __len__(self):
@@ -64,9 +65,10 @@ class SlidingWindowDataset(Dataset):
 
     def __getitem__(self, idx):
         x = self.data[idx:idx + self.lookback]
-        x_mark = np.zeros((self.lookback, 1))
-        # Dummy y_mark (required by TSL signature; unused for non-mark backbones)
-        y_mark = np.zeros((self.pred_len, 1))
+        # Anomaly setup ignores time semantics; mark is zeros. Shape just
+        # has to match the backbone's embedding layer (see BackboneSpec.mark_dim).
+        x_mark = np.zeros((self.lookback, self.mark_dim))
+        y_mark = np.zeros((self.pred_len, self.mark_dim))
         return (
             torch.FloatTensor(x),
             torch.FloatTensor(x_mark),
@@ -88,7 +90,8 @@ def generate_predictions(model, data, config, backbone_spec, desc="Inference"):
     Returns:
         (N, H, C) array; N = T - L (V13 inference patch).
     """
-    dataset = SlidingWindowDataset(data, config.seq_len, config.pred_len)
+    dataset = SlidingWindowDataset(data, config.seq_len, config.pred_len,
+                                    mark_dim=backbone_spec.mark_dim)
     dataloader = DataLoader(
         dataset, batch_size=64, shuffle=False, num_workers=0,
         pin_memory=config.device.type == 'cuda',

@@ -59,6 +59,18 @@ class BackboneSpec:
        'tsl'    → model(x_enc, x_mark_enc, x_dec, x_mark_dec)  (iTransformer, PatchTST, ...)
        'x_only' → model(x_enc)                                  (DLinear, etc., if added)"""
 
+    mark_dim: int = 1
+    """Number of channels in the dummy time-mark tensor (x_mark, y_mark).
+
+    Anomaly-detection setup ignores time semantics — masks are zeros. But
+    the *shape* must match what the backbone's embedding layer expects:
+      - iTransformer / PatchTST / DLinear: mark unused or shape-agnostic → 1 OK
+      - TimeMixer / TimesNet: DataEmbedding(_wo_pos) uses TimeFeatureEmbedding
+        with freq='h' → mark must be 4-dim (hour, day, weekday, month).
+
+    Per-backbone setting so legacy iTransformer artifacts trained with
+    mark_dim=1 keep producing identical outputs after this refactor."""
+
     def call_forward(self, model: nn.Module, x_enc, x_mark_enc=None,
                      x_dec=None, x_mark_dec=None):
         """Single dispatch point so train/inference loops are signature-agnostic."""
