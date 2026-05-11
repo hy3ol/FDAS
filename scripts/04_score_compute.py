@@ -56,7 +56,6 @@ LOG_COLUMNS = [
     "dataset_id", "family", "backbone",
     "test_length", "n_pred", "n_eval_rows",
     "n_skipped_nan", "elapsed_sec",
-    "D_w_min", "D_w_median", "D_w_max",
     "D_w_z_min", "D_w_z_median", "D_w_z_max",
     "n_baseline_train_rows", "n_baseline_channels_used", "baseline_source",
     "label_pos_count", "label_neg_count",
@@ -229,13 +228,15 @@ def process_one(dataset_id: str, family: str, backbone: str) -> dict:
 
         elapsed = time.time() - t0
 
+        # Drop the raw-max D_w column — production score is D_w_z only.
+        # Keeping scores.parquet minimal: (t, D_w_z, label).
+        score_frame_out = score_frame.drop(columns=["D_w"])
         out_dir = get_dataset_results_dir(dataset_id, backbone=backbone)
         score_path = save_table_with_fallback(
-            score_frame, out_dir / "scores.parquet"
+            score_frame_out, out_dir / "scores.parquet"
         )
         save_per_channel_scores(per_ch, out_dir)
 
-        D_w = score_frame["D_w"].to_numpy(dtype=np.float64)
         # label_*_count is over the FULL series (train + test) — matches
         # TSB-AD-M convention where train labels (typically all 0) are
         # included in the metric calculation.
@@ -248,9 +249,6 @@ def process_one(dataset_id: str, family: str, backbone: str) -> dict:
             "n_eval_rows": int(score_frame.shape[0]),
             "n_skipped_nan": int(len(skipped)),
             "elapsed_sec": float(round(elapsed, 3)),
-            "D_w_min": _percentile_safe(D_w, 0),
-            "D_w_median": _percentile_safe(D_w, 50),
-            "D_w_max": _percentile_safe(D_w, 100),
             "D_w_z_min": _percentile_safe(D_w_z, 0),
             "D_w_z_median": _percentile_safe(D_w_z, 50),
             "D_w_z_max": _percentile_safe(D_w_z, 100),

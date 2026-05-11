@@ -39,7 +39,6 @@ from score_utils import (
     compute_tsb_metrics,
     compute_tsb_sliding_window,
     has_required_prediction_artifacts,
-    load_per_channel_scores,
     load_prediction_artifacts,
     load_score_frame,
     prepare_dataset_bundle,
@@ -47,35 +46,13 @@ from score_utils import (
 from artifact_paths import resolve_dataset
 
 
-_AGG_FUNCS = {
-    "max":    lambda x: np.nanmax(x, axis=1),
-    "median": lambda x: np.nanmedian(x, axis=1),
-    "mean":   lambda x: np.nanmean(x, axis=1),
-}
-
-
 METRICS_DIR = RESULTS_ROOT / "04_metrics"
 
-# 6-variant comparison (raw / z_train × max / mean / median).
-#   D_w   = raw_max         (the V13 production GT-free score)
-#   D_w_z = z_train_max     (production with channel z-score normalization)
-# We keep the legacy `*_D_w` and `*_D_w_z` columns for 06/07
-# backward-compatibility, and add 4 more variants (raw_mean, raw_median,
-# z_train_mean, z_train_median) so this single CSV reproduces the
-# compare_agg_normalize 6-variant view inside the main 05 pipeline.
-# (The GT-using `*_base` columns were removed in V14.)
-VARIANTS_6 = [
-    "raw_max", "raw_mean", "raw_median",
-    "z_train_max", "z_train_mean", "z_train_median",
-]
-VARIANT_METRIC_KEYS = ["AUROC", "VUS-PR", "VUS-ROC", "AUC-PR", "Standard-F1", "PA-F1"]
-
-
-def _variant_col(metric: str, variant: str) -> str:
-    """e.g. ('VUS-PR', 'z_train_max') -> 'vus_pr_z_train_max'."""
-    return f"{metric.lower().replace('-', '_')}_{variant}"
-
-
+# V13 production score: D_w_z = max_c (D_w_c - mu_c^train) / sigma_c^train.
+# All metrics in this CSV are computed against this single score.
+# Variant comparisons (raw_max, z_train_mean/median, etc.) live in
+# `ablations/scripts/compare_agg_normalize.py` for reproducibility but are
+# NOT computed inline here — main pipeline stays lean.
 METRICS_COLUMNS = [
     "dataset_id", "family", "backbone", "test_length",
     "n_eval_rows", "n_anomaly_events", "n_eval_anomalies",
@@ -85,15 +62,7 @@ METRICS_COLUMNS = [
     "normal_mse_strict", "normal_mae_strict",
     "normal_mse_strict_median", "normal_mae_strict_median",
     "n_normal_target", "n_normal_strict",
-    # Legacy columns (raw_max == D_w, z_train_max == D_w_z) — kept for 06/07.
-    "auroc_D_w",
-    "vus_pr_D_w",
-    "vus_roc_D_w",
-    "auc_pr_D_w",
-    "standard_f1_D_w",
-    "pa_f1_D_w",
     "sliding_window",
-    "vus_error_D_w",
     "auroc_D_w_z",
     "vus_pr_D_w_z",
     "vus_roc_D_w_z",
@@ -101,9 +70,6 @@ METRICS_COLUMNS = [
     "standard_f1_D_w_z",
     "pa_f1_D_w_z",
     "vus_error_D_w_z",
-    # 6-variant comparison columns (vus_pr_raw_max, vus_pr_raw_mean, ...).
-    *[_variant_col(m, v) for m in VARIANT_METRIC_KEYS for v in VARIANTS_6],
-    "n_kept_train_baseline",
     "status", "error",
 ]
 
@@ -175,7 +141,6 @@ def process_one(
     dataset_id: str, family: str,
     n_anomaly_events: int, n_eval_anomalies: int,
     skip_vus: bool = False,
-    agg_mode: str = "max",
     backbone: str = "iTransformer",
 ) -> dict:
     rec = {col: "" for col in METRICS_COLUMNS}
@@ -203,42 +168,19 @@ def process_one(
         bundle = prepare_dataset_bundle(dataset_id)
         preds, _, _ = load_prediction_artifacts(dataset_id, backbone=backbone)
 
-        # V13 full-series metrics — TSB-AD-M-aligned.
-        # 04_score_compute.py produces scores.parquet with global timestep
-        # indices spanning [0, T_full-1]. We allocate a length-T_full score
-        # vector, fill in the evaluable rows, and edge-fill non-evaluable
-        # leading/trailing/boundary regions for get_metrics.
+        # V13 full-series metric — D_w_z (production score, computed in 04).
+        # We allocate a length-T_full vector, fill in evaluable rows, and
+        # edge-fill non-evaluable leading/trailing/boundary regions.
         full_len = int(bundle.total_timesteps)
         label = bundle.full_labels.astype(np.int64)
-        D_w = np.full(full_len, np.nan, dtype=np.float64)
-
-        # Channel aggregation: read per-channel D_w_c and collapse to 1D using
-        # the requested mode (max | median | mean). For agg_mode="max" the
-        # result is identical to score_frame["D_w"] (which 04_score_compute
-        # produced via channel max), so we use whichever data path is available.
         ts_global = score_frame["t"].to_numpy(dtype=np.int64)
-        if agg_mode == "max":
-            D_w[ts_global] = score_frame["D_w"].to_numpy(dtype=np.float64)
-        else:
-            try:
-                per_ch = load_per_channel_scores(get_dataset_results_dir(dataset_id, backbone=backbone))
-                D_w_c = per_ch["D_w_c"]
-                pc_t = per_ch["t"].astype(np.int64)
-                D_w[pc_t] = _AGG_FUNCS[agg_mode](D_w_c)
-            except FileNotFoundError as exc:
-                rec["status"] = "skip"
-                rec["error"] = f"no_per_channel_scores: {exc}"
-                return rec
-        D_w = _edge_fill_score(D_w)
 
-        auroc_dw = _safe_auroc(label, D_w)
-
-        # D_w_z: train-baseline z-score per channel + median across channels.
-        # Computed in 04 and persisted as score_frame["D_w_z"]. Edge-fill the
-        # non-evaluable region same way as D_w.
         D_w_z = np.full(full_len, np.nan, dtype=np.float64)
-        if "D_w_z" in score_frame.columns:
-            D_w_z[ts_global] = score_frame["D_w_z"].to_numpy(dtype=np.float64)
+        if "D_w_z" not in score_frame.columns:
+            rec["status"] = "skip"
+            rec["error"] = "D_w_z column missing in scores.parquet"
+            return rec
+        D_w_z[ts_global] = score_frame["D_w_z"].to_numpy(dtype=np.float64)
         D_w_z = _edge_fill_score(D_w_z)
         auroc_dwz = _safe_auroc(label, D_w_z)
 
@@ -263,7 +205,6 @@ def process_one(
             "normal_mae_strict_median": float(normal_err["normal_mae_strict_median"]),
             "n_normal_target": int(normal_err["n_normal_target"]),
             "n_normal_strict": int(normal_err["n_normal_strict"]),
-            "auroc_D_w": float(auroc_dw),
             "auroc_D_w_z": float(auroc_dwz),
         })
 
@@ -271,7 +212,7 @@ def process_one(
             return rec
 
         # TSB-AD-M aligned: slidingWindow from RAW full-series first channel,
-        # AND scoring on full-series score/label (D_w, D_w_z already extended
+        # AND scoring on full-series score/label (D_w_z already extended
         # to length T_full above). Reproduces TSB-AD-M's
         # `get_metrics(output, full_label, slidingWindow=sw)` call shape.
         sw_int = compute_tsb_sliding_window(bundle.full_values_raw)
@@ -280,17 +221,10 @@ def process_one(
         # Event-based-F1, R-based-F1, Affiliation-F) come from a SINGLE
         # call into TSB_AD.evaluation.metrics.get_metrics — the same
         # function used by TSB-AD-M's published benchmark.
-        m = compute_tsb_metrics(D_w, label, sw_int)
         m_dwz = compute_tsb_metrics(D_w_z, label, sw_int)
 
         rec.update({
-            "vus_pr_D_w":      float(m["VUS-PR"]),
-            "vus_roc_D_w":     float(m["VUS-ROC"]),
-            "auc_pr_D_w":      float(m["AUC-PR"]),
-            "standard_f1_D_w": float(m["Standard-F1"]),
-            "pa_f1_D_w":       float(m["PA-F1"]),
-            "sliding_window":  int(m.get("sliding_window_used", sw_int)),
-            "vus_error_D_w":   m.get("error", ""),
+            "sliding_window":  int(m_dwz.get("sliding_window_used", sw_int)),
             "vus_pr_D_w_z":      float(m_dwz["VUS-PR"]),
             "vus_roc_D_w_z":     float(m_dwz["VUS-ROC"]),
             "auc_pr_D_w_z":      float(m_dwz["AUC-PR"]),
@@ -302,74 +236,8 @@ def process_one(
         # AUROC: use TSB-AD's value (sklearn.roc_auc_score on the same
         # padded series — same input we just fed get_metrics) so that all
         # rank-based metrics in this row come from one consistent pipeline.
-        if np.isfinite(m["AUC-ROC"]):
-            rec["auroc_D_w"] = float(m["AUC-ROC"])
         if np.isfinite(m_dwz["AUC-ROC"]):
             rec["auroc_D_w_z"] = float(m_dwz["AUC-ROC"])
-
-        # ── 6-variant comparison (raw / z_train × max / mean / median) ──
-        # Reads scores_per_ch.npz (D_w_c) and re-derives the train baseline
-        # from predictions_train.npy, then evaluates the 6 channel-aggregation
-        # variants on the same full-series score/label vectors. Output schema
-        # matches compare_agg_normalize.py for cross-tool consistency.
-        try:
-            from score_utils import (
-                compute_train_baseline_stats as _compute_baseline,
-            )
-            per_ch_path = get_dataset_results_dir(dataset_id, backbone=backbone) / "scores_per_ch.npz"
-            train_pred_path = get_dataset_results_dir(dataset_id, backbone=backbone) / "predictions_train.npy"
-            if per_ch_path.exists() and train_pred_path.exists():
-                pc = load_per_channel_scores(get_dataset_results_dir(dataset_id, backbone=backbone))
-                Dwc = pc["D_w_c"]                                # (T_eval, C)
-                t_idx = pc["t"].astype(np.int64)
-                base_train = _compute_baseline(
-                    np.load(train_pred_path), bundle.train_values_norm,
-                    lookback=192, pred_len=96,
-                )
-                mu, sigma = base_train["mean"], base_train["std"]
-                eps = 1e-8
-                valid_c = np.isfinite(sigma) & (sigma > eps)
-                rec["n_kept_train_baseline"] = int(valid_c.sum())
-                Zt = np.full_like(Dwc, np.nan)
-                if valid_c.any():
-                    Zt[:, valid_c] = (
-                        (Dwc[:, valid_c] - mu[valid_c][None, :])
-                        / sigma[valid_c][None, :]
-                    )
-                # Channel aggregations across 6 variants
-                with np.errstate(invalid="ignore"):
-                    aggs = {
-                        "raw_max":        np.nanmax(Dwc, axis=1),
-                        "raw_mean":       np.nanmean(Dwc, axis=1),
-                        "raw_median":     np.nanmedian(Dwc, axis=1),
-                        "z_train_max":    np.nanmax(Zt, axis=1),
-                        "z_train_mean":   np.nanmean(Zt, axis=1),
-                        "z_train_median": np.nanmedian(Zt, axis=1),
-                    }
-                # Edge-fill on full series + TSB-AD metrics per variant
-                for v_name, v_vals in aggs.items():
-                    v_full = np.full(full_len, np.nan, dtype=np.float64)
-                    v_full[t_idx] = v_vals
-                    v_full = _edge_fill_score(v_full)
-                    if skip_vus:
-                        # Only AUROC available without VUS calculation
-                        rec[_variant_col("AUROC", v_name)] = _safe_auroc(label, v_full)
-                        continue
-                    m_v = compute_tsb_metrics(v_full, label, sw_int)
-                    auc_roc = m_v.get("AUC-ROC", float("nan"))
-                    rec[_variant_col("AUROC", v_name)] = (
-                        float(auc_roc) if np.isfinite(auc_roc)
-                        else _safe_auroc(label, v_full)
-                    )
-                    for k in ("VUS-PR", "VUS-ROC", "AUC-PR",
-                              "Standard-F1", "PA-F1"):
-                        rec[_variant_col(k, v_name)] = float(m_v.get(k, np.nan))
-        except Exception as v_exc:
-            # 6-variant block is best-effort; legacy columns above are
-            # the canonical source for downstream 06/07.
-            rec["error"] = (rec.get("error") or "") + (
-                f" | 6-variant: {type(v_exc).__name__}: {v_exc}"
-            )
 
         return rec
     except Exception as exc:
@@ -404,12 +272,12 @@ def _tsb_row_from_rec(rec: dict) -> dict:
         "dataset":     name,
         "MSE":         _f(rec.get("normal_mse", "")),
         "MAE":         _f(rec.get("normal_mae", "")),
-        "VUS-PR":      _f(rec.get("vus_pr_D_w", "")),
-        "VUS-ROC":     _f(rec.get("vus_roc_D_w", "")),
-        "AUC-PR":      _f(rec.get("auc_pr_D_w", "")),
-        "AUC-ROC":     _f(rec.get("auroc_D_w", "")),
-        "Standard-F1": _f(rec.get("standard_f1_D_w", "")),
-        "PA-F1":       _f(rec.get("pa_f1_D_w", "")),
+        "VUS-PR":      _f(rec.get("vus_pr_D_w_z", "")),
+        "VUS-ROC":     _f(rec.get("vus_roc_D_w_z", "")),
+        "AUC-PR":      _f(rec.get("auc_pr_D_w_z", "")),
+        "AUC-ROC":     _f(rec.get("auroc_D_w_z", "")),
+        "Standard-F1": _f(rec.get("standard_f1_D_w_z", "")),
+        "PA-F1":       _f(rec.get("pa_f1_D_w_z", "")),
     }
 
 
@@ -427,12 +295,12 @@ def _tsb_row_from_csv_row(r: dict) -> dict:
         "dataset":     name,
         "MSE":         r.get("normal_mse", ""),
         "MAE":         r.get("normal_mae", ""),
-        "VUS-PR":      r.get("vus_pr_D_w", ""),
-        "VUS-ROC":     r.get("vus_roc_D_w", ""),
-        "AUC-PR":      r.get("auc_pr_D_w", ""),
-        "AUC-ROC":     r.get("auroc_D_w", ""),
-        "Standard-F1": r.get("standard_f1_D_w", ""),
-        "PA-F1":       r.get("pa_f1_D_w", ""),
+        "VUS-PR":      r.get("vus_pr_D_w_z", ""),
+        "VUS-ROC":     r.get("vus_roc_D_w_z", ""),
+        "AUC-PR":      r.get("auc_pr_D_w_z", ""),
+        "AUC-ROC":     r.get("auroc_D_w_z", ""),
+        "Standard-F1": r.get("standard_f1_D_w_z", ""),
+        "PA-F1":       r.get("pa_f1_D_w_z", ""),
     }
 
 
@@ -441,11 +309,10 @@ def _process_one_worker(args_tuple) -> tuple[str, dict]:
 
     Top-level (not closure) so it can be pickled across ProcessPoolExecutor.
     """
-    dataset_id, family, n_evt, n_eval, skip_vus, agg_mode, backbone = args_tuple
+    dataset_id, family, n_evt, n_eval, skip_vus, backbone = args_tuple
     rec = process_one(
         dataset_id, family, n_evt, n_eval,
         skip_vus=skip_vus,
-        agg_mode=agg_mode,
         backbone=backbone,
     )
     return (dataset_id, rec)
@@ -473,14 +340,6 @@ def main():
         help="Skip VUS-PR / VUS-ROC / AUC-PR computation (faster; AUROC only).",
     )
     parser.add_argument(
-        "--agg", choices=list(_AGG_FUNCS.keys()), default="max",
-        help="Channel aggregation for D_w(t). 'max' (default) reproduces the "
-             "score saved in scores.parquet by 04_score_compute.py. 'median' "
-             "and 'mean' read scores_per_ch.npz and re-aggregate. Output "
-             "files are suffixed with _{agg} when agg != max so each variant "
-             "lands in its own CSV (kept side-by-side with the max baseline).",
-    )
-    parser.add_argument(
         "--workers", type=int, default=None,
         help="Number of parallel processes. Default: cpu_count() // 2 "
              "(set 1 to disable multiprocessing).",
@@ -490,8 +349,7 @@ def main():
     METRICS_DIR.mkdir(parents=True, exist_ok=True)
     # Per-backbone CSVs so multiple backbones don't clobber each other.
     bb_suffix = f"__{args.backbone}"
-    agg_suffix = "" if args.agg == "max" else f"_{args.agg}"
-    out_path = METRICS_DIR / f"per_dataset_metrics{bb_suffix}{agg_suffix}.csv"
+    out_path = METRICS_DIR / f"per_dataset_metrics{bb_suffix}.csv"
 
     rows = _list_all_datasets_with_scores(args.backbone)
     print(f"  backbone={args.backbone}; enumerating {len(rows)} dataset(s) with scores")
@@ -504,7 +362,7 @@ def main():
         print(f"  applied --min-eval-anomalies={args.min_eval_anomalies} "
               f"→ {len(rows)} dataset(s) remain")
 
-    tsb_path = out_path.parent / f"metrics_tsb_format{bb_suffix}{agg_suffix}.csv"
+    tsb_path = out_path.parent / f"metrics_tsb_format{bb_suffix}.csv"
 
     # --only-missing: seed both files with already-ok rows so the on-disk
     # state is consistent before we start appending new ones.
@@ -536,10 +394,10 @@ def main():
             line = (
                 f"  [{i:>3}/{total}] {ds_id} ✓ "
                 f"MSE={rec['normal_mse']:.4f} MAE={rec['normal_mae']:.4f} "
-                f"AUROC(D_w)={rec['auroc_D_w']:.3f}"
+                f"AUROC(D_w_z)={rec['auroc_D_w_z']:.3f}"
             )
-            if not args.skip_vus and isinstance(rec.get("vus_pr_D_w"), float):
-                line += f" VUS_PR(D_w)={rec['vus_pr_D_w']:.3f}"
+            if not args.skip_vus and isinstance(rec.get("vus_pr_D_w_z"), float):
+                line += f" VUS_PR(D_w_z)={rec['vus_pr_D_w_z']:.3f}"
             return line
         elif rec["status"] == "skip":
             n_skip += 1
@@ -581,7 +439,6 @@ def main():
                     int(r.get("n_anomaly_events") or 0),
                     int(r.get("n_eval_anomalies") or 0),
                     skip_vus=args.skip_vus,
-                    agg_mode=args.agg,
                     backbone=args.backbone,
                 )
                 _write(rec)
@@ -592,7 +449,7 @@ def main():
                     r["dataset_id"], r["family"],
                     int(r.get("n_anomaly_events") or 0),
                     int(r.get("n_eval_anomalies") or 0),
-                    args.skip_vus, args.agg, args.backbone,
+                    args.skip_vus, args.backbone,
                 )
                 for r in rows
             ]
@@ -610,19 +467,19 @@ def main():
     # Sanity-check distribution
     ok = [r for r in out_records if r["status"] == "ok"]
     if ok:
-        aurocs = np.array([r["auroc_D_w"] for r in ok], dtype=np.float64)
+        aurocs = np.array([r["auroc_D_w_z"] for r in ok], dtype=np.float64)
         mses = np.array([r["normal_mse"] for r in ok], dtype=np.float64)
         maes = np.array([r["normal_mae"] for r in ok], dtype=np.float64)
-        print(f"  [SANITY] AUROC(D_w): min={np.nanmin(aurocs):.3f} "
+        print(f"  [SANITY] AUROC(D_w_z): min={np.nanmin(aurocs):.3f} "
               f"median={np.nanmedian(aurocs):.3f} max={np.nanmax(aurocs):.3f}")
         print(f"  [SANITY] Normal MSE: min={np.nanmin(mses):.4f} "
               f"median={np.nanmedian(mses):.4f} max={np.nanmax(mses):.4f}")
         print(f"  [SANITY] Normal MAE: min={np.nanmin(maes):.4f} "
               f"median={np.nanmedian(maes):.4f} max={np.nanmax(maes):.4f}")
         if not args.skip_vus:
-            vus = np.array([r.get("vus_pr_D_w", float("nan")) for r in ok], dtype=np.float64)
+            vus = np.array([r.get("vus_pr_D_w_z", float("nan")) for r in ok], dtype=np.float64)
             if np.any(np.isfinite(vus)):
-                print(f"  [SANITY] VUS-PR(D_w): min={np.nanmin(vus):.3f} "
+                print(f"  [SANITY] VUS-PR(D_w_z): min={np.nanmin(vus):.3f} "
                       f"median={np.nanmedian(vus):.3f} max={np.nanmax(vus):.3f}")
     return 0 if n_fail == 0 else 1
 
