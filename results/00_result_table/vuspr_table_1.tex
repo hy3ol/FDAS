@@ -13,33 +13,34 @@
 \toprule
 \textbf{Method} & \textbf{AUC-PR} & \textbf{AUC-ROC} & \textbf{VUS-PR} & \textbf{VUS-ROC} & \textbf{Standard-F1} & \textbf{PA-F1} \\
 \midrule
-CNN                    & \textbf{0.32}      & \textbf{0.73}      & \textbf{0.31}      & \textbf{0.76}      & \textbf{0.37}      & \underline{0.78}   \\
-OmniAnomaly            & 0.27               & 0.65               & \textbf{0.31}      & 0.69               & 0.32               & 0.55               \\
-PCA                    & \underline{0.31}   & \underline{0.70}   & \textbf{0.31}      & 0.74               & \textbf{0.37}      & \textbf{0.79}      \\
-LSTMAD                 & \underline{0.31}   & \underline{0.70}   & \textbf{0.31}      & 0.74               & \underline{0.36}   & \textbf{0.79}      \\
-USAD                   & 0.26               & 0.64               & \underline{0.30}   & 0.68               & 0.31               & 0.53               \\
-AutoEncoder            & 0.30               & 0.67               & \underline{0.30}   & 0.69               & 0.34               & 0.60               \\
-KMeansAD               & 0.25               & 0.69               & 0.29               & 0.73               & 0.31               & 0.68               \\
-CBLOF                  & 0.28               & 0.67               & 0.27               & 0.70               & 0.32               & 0.65               \\
-MCD                    & 0.27               & 0.65               & 0.27               & 0.69               & 0.33               & 0.46               \\
-OCSVM                  & 0.23               & 0.61               & 0.26               & 0.67               & 0.28               & 0.48               \\
-Donut                  & 0.20               & 0.64               & 0.26               & 0.71               & 0.28               & 0.52               \\
-RobustPCA              & 0.24               & 0.58               & 0.24               & 0.61               & 0.29               & 0.60               \\
-FITS                   & 0.15               & 0.58               & 0.21               & 0.66               & 0.22               & 0.72               \\
-OFA                    & 0.15               & 0.55               & 0.21               & 0.63               & 0.21               & 0.72               \\
-EIF                    & 0.19               & 0.67               & 0.21               & 0.71               & 0.26               & 0.74               \\
-COPOD                  & 0.20               & 0.65               & 0.20               & 0.69               & 0.27               & 0.72               \\
-IForest                & 0.19               & 0.66               & 0.20               & 0.67               & 0.26               & 0.68               \\
-HBOS                   & 0.16               & 0.63               & 0.19               & 0.67               & 0.24               & 0.67               \\
-TimesNet               & 0.13               & 0.56               & 0.19               & 0.64               & 0.20               & 0.68               \\
-KNN                    & 0.14               & 0.51               & 0.18               & 0.59               & 0.19               & 0.69               \\
-TranAD                 & 0.14               & 0.59               & 0.18               & 0.65               & 0.21               & 0.68               \\
-LOF                    & 0.10               & 0.53               & 0.14               & 0.60               & 0.15               & 0.57               \\
-AnomalyTransformer     & 0.07               & 0.52               & 0.12               & 0.57               & 0.12               & 0.53               \\
+CNN                    & \textbf{0.32} & \textbf{0.73} & \textbf{0.31} & \textbf{0.76} & \textbf{0.37} & \underline{0.78} \\
+OmniAnomaly            & 0.27 & 0.65 & \textbf{0.31} & 0.69 & 0.32 & 0.55 \\
+PCA                    & \underline{0.31} & \underline{0.70} & \textbf{0.31} & 0.74 & \textbf{0.37} & \textbf{0.79} \\
+LSTMAD                 & \underline{0.31} & \underline{0.70} & \textbf{0.31} & 0.74 & \underline{0.36} & \textbf{0.79} \\
+USAD                   & 0.26 & 0.64 & \underline{0.30} & 0.68 & 0.31 & 0.53 \\
+AutoEncoder            & 0.30 & 0.67 & \underline{0.30} & 0.69 & 0.34 & 0.60 \\
+KMeansAD               & 0.25 & 0.69 & 0.29 & 0.73 & 0.31 & 0.68 \\
+CBLOF                  & 0.28 & 0.67 & 0.27 & 0.70 & 0.32 & 0.65 \\
+MCD                    & 0.27 & 0.65 & 0.27 & 0.69 & 0.33 & 0.46 \\
+OCSVM                  & 0.23 & 0.61 & 0.26 & 0.67 & 0.28 & 0.48 \\
+Donut                  & 0.20 & 0.64 & 0.26 & 0.71 & 0.28 & 0.52 \\
+RobustPCA              & 0.24 & 0.58 & 0.24 & 0.61 & 0.29 & 0.60 \\
+FITS                   & 0.15 & 0.58 & 0.21 & 0.66 & 0.22 & 0.72 \\
+OFA                    & 0.15 & 0.55 & 0.21 & 0.63 & 0.21 & 0.72 \\
+EIF                    & 0.19 & 0.67 & 0.21 & 0.71 & 0.26 & 0.74 \\
+COPOD                  & 0.20 & 0.65 & 0.20 & 0.69 & 0.27 & 0.72 \\
+IForest                & 0.19 & 0.66 & 0.20 & 0.67 & 0.26 & 0.68 \\
+HBOS                   & 0.16 & 0.63 & 0.19 & 0.67 & 0.24 & 0.67 \\
+TimesNet               & 0.13 & 0.56 & 0.19 & 0.64 & 0.20 & 0.68 \\
+KNN                    & 0.14 & 0.51 & 0.18 & 0.59 & 0.19 & 0.69 \\
+TranAD                 & 0.14 & 0.59 & 0.18 & 0.65 & 0.21 & 0.68 \\
+LOF                    & 0.10 & 0.53 & 0.14 & 0.60 & 0.15 & 0.57 \\
+AnomalyTransformer     & 0.07 & 0.52 & 0.12 & 0.57 & 0.12 & 0.53 \\
 \midrule
-\textbf{FDAS DLinear}  & 0.25               & \underline{0.70}   & \textbf{0.31}      & \underline{0.75}   & 0.32               & 0.58               \\
-\textbf{FDAS iTransformer} & 0.24               & 0.69               & \underline{0.30}   & \underline{0.75}   & 0.32               & 0.61               \\
-\textbf{FDAS PatchTST} & 0.23               & 0.68               & \underline{0.30}   & 0.74               & 0.31               & 0.59               \\
+\textbf{FDAS DLinear} & 0.24 & 0.67 & \underline{0.30} & 0.72 & 0.31 & 0.60 \\
+\textbf{FDAS iTransformer} & 0.24 & 0.69 & \underline{0.30} & \underline{0.75} & 0.32 & 0.61 \\
+\textbf{FDAS PatchTST} & 0.22 & 0.65 & 0.29 & 0.71 & 0.30 & 0.57 \\
+\textbf{FDAS TimeMixer} & 0.24 & \underline{0.70} & \textbf{0.31} & \textbf{0.76} & 0.32 & 0.59 \\
 \bottomrule
 \end{tabular}
 
