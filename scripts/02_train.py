@@ -30,12 +30,19 @@ from config_factory import build_config, export_train_config
 
 
 class TimeSeriesDataset(Dataset):
-    """Dataset for multi-step forecasting (backbone-agnostic)."""
+    """Dataset for multi-step forecasting (backbone-agnostic).
 
-    def __init__(self, data, lookback, pred_len):
+    `mark_dim` defaults to 1 (legacy iTransformer / PatchTST / DLinear shape,
+    bit-identical to pre-multimodel vintage). TimeMixer / TimesNet need
+    mark_dim=4 (timeF + freq='h' contract); train_model() reads that from
+    `BackboneSpec.mark_dim` and passes it in.
+    """
+
+    def __init__(self, data, lookback, pred_len, mark_dim=1):
         self.data = data
         self.lookback = lookback
         self.pred_len = pred_len
+        self.mark_dim = mark_dim
         self.length = len(data) - lookback - pred_len + 1
 
     def __len__(self):
@@ -44,10 +51,10 @@ class TimeSeriesDataset(Dataset):
     def __getitem__(self, index):
         x = self.data[index:index + self.lookback]
         y = self.data[index + self.lookback:index + self.lookback + self.pred_len]
-        # Dummy timestamps — TSL signature requires marks; backbones that
-        # don't use marks (DLinear, etc.) ignore them via call_forward.
-        x_mark = np.zeros((self.lookback, 1))
-        y_mark = np.zeros((self.pred_len, 1))
+        # Anomaly setup ignores time semantics; mark is zeros. Shape just
+        # has to match the backbone's embedding layer (see BackboneSpec.mark_dim).
+        x_mark = np.zeros((self.lookback, self.mark_dim))
+        y_mark = np.zeros((self.pred_len, self.mark_dim))
         return (
             torch.FloatTensor(x),
             torch.FloatTensor(x_mark),
@@ -156,8 +163,10 @@ def train_model(backbone_name: str):
 
     # Create datasets
     print("\n[2] Creating datasets")
-    train_dataset = TimeSeriesDataset(train_data, config.seq_len, config.pred_len)
-    val_dataset = TimeSeriesDataset(val_data, config.seq_len, config.pred_len)
+    train_dataset = TimeSeriesDataset(train_data, config.seq_len, config.pred_len,
+                                       mark_dim=backbone_spec.mark_dim)
+    val_dataset = TimeSeriesDataset(val_data, config.seq_len, config.pred_len,
+                                     mark_dim=backbone_spec.mark_dim)
 
     train_loader = DataLoader(
         train_dataset, batch_size=config.batch_size, shuffle=True,

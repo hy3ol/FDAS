@@ -18,6 +18,8 @@ from .base import BackboneSpec
 from . import iTransformer as _itransformer
 from . import DLinear as _dlinear
 from . import PatchTST as _patchtst
+from . import TimeMixer as _timemixer
+from . import TimesNet as _timesnet
 
 DEFAULT_BACKBONE = "iTransformer"
 
@@ -138,7 +140,102 @@ BACKBONES: dict[str, BackboneSpec] = {
         ],
         forward_signature="tsl",
     ),
-    # Future backbones (TimeMixer, TimeXer, ...) get appended here.
+    # ── TimeMixer (Wang et al., ICLR 2024). ────────────────────────────
+    # Vendored verbatim from thuml/Time-Series-Library `models/TimeMixer.py`
+    # (with the three `from layers.X import Y` imports rewritten to
+    # `from ._layers import Y` for folder self-containment).
+    #
+    # `model/TimeMixer/_layers.py` bundles series_decomp + DataEmbedding_wo_pos
+    # + Normalize (TSL verbatim). label_len=0 because we don't use a decoder
+    # window; task_name="long_term_forecast" routes through forecast().
+    # use_norm=1 enables per-window normalization (TSL paper default).
+    "TimeMixer": BackboneSpec(
+        name="TimeMixer",
+        model_factory=lambda cfg: _timemixer.Model(cfg),
+        default_model_hps=dict(
+            # Architecture (TSL Optimal_Multi_algo + ICLR'24 paper Appendix)
+            d_model=32,
+            d_ff=32,
+            e_layers=2,
+            dropout=0.1,
+            # TimeMixer-specific
+            moving_avg=25,
+            channel_independence=1,         # 1 = channel-independent (paper default)
+            down_sampling_layers=3,
+            down_sampling_window=2,
+            down_sampling_method="avg",
+            decomp_method="moving_avg",     # "moving_avg" or "dft_decomp"
+            use_norm=1,                     # 1 = enable per-window Normalize
+            # TSL signature stubs
+            embed="timeF",
+            freq="h",
+            label_len=0,                    # forecasting only (no decoder window)
+            task_name="long_term_forecast",
+        ),
+        default_training_hps=dict(
+            batch_size=128,
+            learning_rate=1e-3,             # ICLR'24 paper Appendix A.2
+            num_epochs=10,
+            patience=3,
+            optimizer="adam",
+            scheduler="none",
+        ),
+        extra_config_fields=[
+            "d_model", "d_ff", "e_layers", "dropout",
+            "moving_avg", "channel_independence",
+            "down_sampling_layers", "down_sampling_window", "down_sampling_method",
+            "decomp_method", "use_norm",
+            "embed", "freq", "label_len", "task_name",
+        ],
+        forward_signature="tsl",
+        mark_dim=4,                         # timeF + freq='h' → 4-dim mark
+    ),
+    # ── TimesNet (Wu et al., ICLR 2023). ───────────────────────────────
+    # Vendored verbatim from thuml/Time-Series-Library `models/TimesNet.py`
+    # (with `from layers.Conv_Blocks import Inception_Block_V1` rewritten
+    # to `from ._layers import Inception_Block_V1`). DataEmbedding is
+    # imported from V13/layers/Embed.py (shared TSL standard).
+    #
+    # `model/TimesNet/_layers.py` bundles Inception_Block_V1 + V2 (TSL verbatim).
+    # top_k=5 picks the dominant 5 periods (paper default). num_kernels=6 is
+    # the Inception_Block default. d_model=32, d_ff=32 keeps this heavy
+    # CNN-on-period-folding model trainable across 200 datasets at reasonable
+    # cost (paper uses up to d_model=64 per-dataset).
+    "TimesNet": BackboneSpec(
+        name="TimesNet",
+        model_factory=lambda cfg: _timesnet.Model(cfg),
+        default_model_hps=dict(
+            # Architecture (TSL Optimal_Multi_algo + ICLR'23 paper Appendix)
+            d_model=32,
+            d_ff=32,
+            e_layers=2,
+            dropout=0.1,
+            # TimesNet-specific
+            top_k=5,                        # number of dominant FFT periods
+            num_kernels=6,                  # Inception_Block kernel count
+            # TSL signature stubs
+            embed="timeF",
+            freq="h",
+            label_len=0,
+            task_name="long_term_forecast",
+        ),
+        default_training_hps=dict(
+            batch_size=32,                  # TSL default
+            learning_rate=1e-4,             # ICLR'23 paper
+            num_epochs=10,
+            patience=3,
+            optimizer="adam",
+            scheduler="none",
+        ),
+        extra_config_fields=[
+            "d_model", "d_ff", "e_layers", "dropout",
+            "top_k", "num_kernels",
+            "embed", "freq", "label_len", "task_name",
+        ],
+        forward_signature="tsl",
+        mark_dim=4,                         # timeF + freq='h' → 4-dim mark
+    ),
+    # Future backbones (TimeXer, Chronos, TimesFM, ...) get appended here.
 }
 
 
