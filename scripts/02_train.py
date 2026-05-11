@@ -128,18 +128,20 @@ def validate(model, dataloader, criterion, device, backbone_spec):
     return total_loss / len(dataloader)
 
 
-def train_model(backbone_name: str):
+def train_model(backbone_name: str, overrides: dict | None = None):
     backbone_spec = get_backbone(backbone_name)
 
     print("=" * 60)
     print(f"V13 Training — backbone: {backbone_name}")
+    if overrides:
+        print(f"  CLI overrides: {overrides}")
     print("=" * 60)
 
     # Load metadata
     print("\n[1] Loading metadata and data")
     metadata = load_data_metadata()
 
-    config = build_config(metadata, backbone_spec)
+    config = build_config(metadata, backbone_spec, overrides=overrides)
     models_dir = get_models_dir(backbone=backbone_name)
     print(f"    Lookback (L): {config.seq_len}")
     print(f"    Pred_len (H): {config.pred_len}")
@@ -285,5 +287,14 @@ if __name__ == "__main__":
         help=f"Backbone name (default: {DEFAULT_BACKBONE}). "
              f"Available: {list_backbones()}",
     )
+    parser.add_argument(
+        "--batch-size", type=int, default=None,
+        help="Override BackboneSpec.default_training_hps['batch_size']. "
+             "Useful for OOM mitigation on high-channel datasets "
+             "(e.g. OPPORTUNITY = 248 channels).",
+    )
     args = parser.parse_args()
-    train_model(args.backbone)
+    overrides = {}
+    if args.batch_size is not None:
+        overrides["batch_size"] = args.batch_size
+    train_model(args.backbone, overrides=overrides or None)

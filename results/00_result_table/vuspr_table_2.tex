@@ -13,9 +13,9 @@
 \toprule
 \textbf{Method} & \textbf{CATSv2} & \textbf{CreditCard} & \textbf{Daphnet} & \textbf{Exathlon} & \textbf{GECCO} & \textbf{GHL} & \textbf{Genesis} & \textbf{LTDB} & \textbf{MITDB} & \textbf{MSL} & \textbf{OPP} & \textbf{PSM} & \textbf{SMAP} & \textbf{SMD} & \textbf{SVDB} & \textbf{SWaT} & \textbf{TAO} \\
 \midrule
-CNN                    & 0.08 & 0.02 & 0.21 & 0.68 & 0.03 & 0.02 & 0.10 & \underline{0.33} & \underline{0.14} & \underline{0.35} & 0.16 & \underline{0.22} & 0.19 & \underline{0.35} & 0.19 & 0.41 & \textbf{1.00} \\
+CNN                    & 0.08 & 0.02 & 0.21 & 0.68 & 0.03 & 0.02 & 0.10 & \underline{0.33} & 0.14 & \underline{0.35} & 0.16 & \underline{0.22} & 0.19 & \underline{0.35} & 0.19 & 0.41 & \textbf{1.00} \\
 OmniAnomaly            & 0.04 & 0.02 & \textbf{0.34} & \underline{0.84} & 0.02 & \textbf{0.07} & 0.00 & \textbf{0.44} & 0.11 & 0.22 & 0.18 & 0.16 & 0.12 & 0.17 & \textbf{0.35} & 0.15 & \underline{0.81} \\
-PCA                    & 0.12 & \textbf{0.10} & 0.13 & \textbf{0.95} & \textbf{0.20} & 0.01 & 0.02 & 0.24 & 0.07 & 0.15 & \textbf{0.30} & 0.16 & 0.09 & \textbf{0.36} & 0.11 & \underline{0.45} & \textbf{1.00} \\
+PCA                    & 0.12 & \textbf{0.10} & 0.13 & \textbf{0.95} & \underline{0.20} & 0.01 & 0.02 & 0.24 & 0.07 & 0.15 & \textbf{0.30} & 0.16 & 0.09 & \textbf{0.36} & 0.11 & \underline{0.45} & \textbf{1.00} \\
 LSTMAD                 & 0.04 & 0.02 & \underline{0.31} & \underline{0.82} & 0.02 & \underline{0.06} & 0.04 & 0.30 & 0.09 & 0.22 & 0.17 & \underline{0.24} & 0.16 & \underline{0.33} & 0.15 & 0.16 & \underline{0.99} \\
 USAD                   & 0.04 & 0.02 & \textbf{0.34} & \underline{0.84} & 0.02 & \underline{0.06} & 0.00 & \underline{0.41} & 0.12 & 0.23 & 0.18 & 0.19 & 0.11 & 0.16 & \underline{0.32} & 0.15 & \underline{0.81} \\
 AutoEncoder            & 0.06 & 0.03 & 0.13 & \underline{0.91} & 0.05 & 0.05 & 0.01 & 0.21 & 0.04 & 0.22 & 0.14 & \textbf{0.28} & 0.13 & \underline{0.30} & 0.06 & \textbf{0.58} & \textbf{1.00} \\
@@ -39,7 +39,8 @@ AnomalyTransformer     & 0.03 & 0.02 & 0.07 & 0.10 & 0.02 & 0.03 & 0.01 & 0.21 &
 \midrule
 \textbf{FDAS DLinear}  & 0.15 & 0.05 & \underline{0.30} & \underline{0.83} & 0.06 & 0.03 & 0.31 & \underline{0.36} & 0.10 & 0.21 & 0.16 & 0.14 & 0.22 & \underline{0.28} & 0.18 & 0.39 & \underline{0.80} \\
 \textbf{FDAS iTransformer} & \textbf{0.34} & 0.04 & 0.20 & 0.64 & \underline{0.19} & 0.01 & 0.09 & \underline{0.38} & \underline{0.15} & 0.26 & 0.13 & 0.12 & \underline{0.33} & 0.26 & 0.19 & 0.22 & \underline{0.80} \\
-\textbf{FDAS PatchTST} & \underline{0.31} & 0.04 & \textbf{0.34} & 0.70 & \textbf{0.20} & 0.01 & 0.12 & \underline{0.38} & \textbf{0.18} & 0.24 & 0.13 & 0.11 & 0.20 & \underline{0.27} & 0.21 & 0.24 & \underline{0.80} \\
+\textbf{FDAS PatchTST} & \underline{0.31} & 0.04 & \textbf{0.34} & 0.70 & \underline{0.20} & 0.01 & 0.12 & \underline{0.38} & \underline{0.18} & 0.24 & 0.13 & 0.11 & 0.20 & \underline{0.27} & 0.21 & 0.24 & \underline{0.80} \\
+\textbf{FDAS TimeMixer} & 0.13 & 0.04 & \underline{0.26} & \underline{0.75} & \textbf{0.25} & 0.02 & 0.20 & \underline{0.36} & \textbf{0.20} & 0.28 & 0.13 & 0.11 & 0.23 & \underline{0.28} & 0.23 & 0.22 & \underline{0.80} \\
 \bottomrule
 \end{tabular}
 

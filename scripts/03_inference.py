@@ -77,7 +77,8 @@ class SlidingWindowDataset(Dataset):
         )
 
 
-def generate_predictions(model, data, config, backbone_spec, desc="Inference"):
+def generate_predictions(model, data, config, backbone_spec, desc="Inference",
+                          batch_size=64):
     """Generate (N, H, C) predictions for given data.
 
     Args:
@@ -86,6 +87,7 @@ def generate_predictions(model, data, config, backbone_spec, desc="Inference"):
         config: Config (used for seq_len, pred_len, enc_in, device)
         backbone_spec: BackboneSpec — controls forward signature dispatch
         desc: tqdm description
+        batch_size: inference DataLoader batch size (default 64; lower for OOM)
 
     Returns:
         (N, H, C) array; N = T - L (V13 inference patch).
@@ -93,7 +95,7 @@ def generate_predictions(model, data, config, backbone_spec, desc="Inference"):
     dataset = SlidingWindowDataset(data, config.seq_len, config.pred_len,
                                     mark_dim=backbone_spec.mark_dim)
     dataloader = DataLoader(
-        dataset, batch_size=64, shuffle=False, num_workers=0,
+        dataset, batch_size=batch_size, shuffle=False, num_workers=0,
         pin_memory=config.device.type == 'cuda',
     )
 
@@ -160,7 +162,7 @@ def compute_window_error_metrics(predictions, data, lookback, pred_len, chunk_si
     return mse, mae
 
 
-def run_inference(backbone_name: str):
+def run_inference(backbone_name: str, batch_size: int = 64):
     backbone_spec = get_backbone(backbone_name)
 
     print("=" * 60)
@@ -217,7 +219,8 @@ def run_inference(backbone_name: str):
     T_train = len(train_data)
     print(f"    Train windows (N_train): {N_train} (full-GT subset: {N_train_full})")
     predictions_train = generate_predictions(
-        model, train_data, config, backbone_spec, desc="Train Inference"
+        model, train_data, config, backbone_spec, desc="Train Inference",
+        batch_size=batch_size,
     )
     print(f"    ✓ Train predictions: {predictions_train.shape}")
 
@@ -227,7 +230,8 @@ def run_inference(backbone_name: str):
         N_val_full = len(val_data) - config.seq_len - config.pred_len + 1
         print(f"    Val windows (N_val): {N_val} (full-GT subset: {N_val_full})")
         predictions_val = generate_predictions(
-            model, val_data, config, backbone_spec, desc="Val Inference"
+            model, val_data, config, backbone_spec, desc="Val Inference",
+            batch_size=batch_size,
         )
         print(f"    ✓ Val predictions: {predictions_val.shape}")
     else:
@@ -242,7 +246,8 @@ def run_inference(backbone_name: str):
     T_test = len(test_data)
     print(f"    Test windows (N_test): {N_test} (full-GT subset: {N_test_full})")
     predictions_test = generate_predictions(
-        model, test_data, config, backbone_spec, desc="Test Inference"
+        model, test_data, config, backbone_spec, desc="Test Inference",
+        batch_size=batch_size,
     )
     print(f"    ✓ Test predictions: {predictions_test.shape}")
 
@@ -318,5 +323,10 @@ if __name__ == "__main__":
         "--backbone", type=str, default=DEFAULT_BACKBONE,
         help=f"Backbone name (default: {DEFAULT_BACKBONE}). Available: {list_backbones()}",
     )
+    parser.add_argument(
+        "--batch-size", type=int, default=64,
+        help="Inference DataLoader batch size (default 64; lower for high-channel "
+             "datasets like OPPORTUNITY=248 channels to avoid OOM).",
+    )
     args = parser.parse_args()
-    run_inference(args.backbone)
+    run_inference(args.backbone, batch_size=args.batch_size)
