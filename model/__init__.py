@@ -17,6 +17,7 @@ from __future__ import annotations
 from .base import BackboneSpec
 from . import iTransformer as _itransformer
 from . import DLinear as _dlinear
+from . import PatchTST as _patchtst
 
 DEFAULT_BACKBONE = "iTransformer"
 
@@ -83,7 +84,61 @@ BACKBONES: dict[str, BackboneSpec] = {
         extra_config_fields=["individual"],
         forward_signature="x_only",
     ),
-    # Future backbones (PatchTST, TimeMixer, TimeXer, ...) get appended here.
+    # ── PatchTST (Nie et al., ICLR 2023). ──────────────────────────────
+    # Vendored verbatim from thuml/Time-Series-Library `models/PatchTST.py`
+    # (with only `from layers.Embed import PatchEmbedding` rewritten to
+    # `from .patch_embedding import PatchEmbedding` to make this model
+    # folder self-contained).
+    #
+    # PatchEmbedding + PositionalEmbedding are vendored into
+    # `model/PatchTST/patch_embedding.py` (also verbatim from TSL).
+    # The other two TSL dependencies (`Encoder/EncoderLayer` and
+    # `FullAttention/AttentionLayer`) are already in V13/layers/ from the
+    # iTransformer vintage — shared TSL standard.
+    #
+    # patch_len=16, stride=8 are PatchTST.Model.__init__ defaults (paper
+    # values for L=192); we set them via lambda so train_config.json
+    # captures them. task_name="long_term_forecast" routes through the
+    # forecast() branch of the multi-task Model.
+    "PatchTST": BackboneSpec(
+        name="PatchTST",
+        model_factory=lambda cfg: _patchtst.Model(
+            cfg, patch_len=cfg.patch_len, stride=cfg.stride
+        ),
+        default_model_hps=dict(
+            # Architecture (TSL Optimal_Multi_algo / paper Appendix)
+            d_model=128,
+            n_heads=16,
+            e_layers=3,
+            d_ff=256,
+            dropout=0.2,
+            factor=1,
+            activation="gelu",
+            # PatchTST-specific
+            patch_len=16,
+            stride=8,
+            # TSL signature stubs (unused by PatchTST but required by build_config)
+            embed="timeF",
+            freq="h",
+            # Multi-task gate (we always use forecast())
+            task_name="long_term_forecast",
+        ),
+        default_training_hps=dict(
+            batch_size=128,               # TSL default
+            learning_rate=1e-4,           # PatchTST paper Appendix A.2
+            num_epochs=10,
+            patience=3,
+            optimizer="adam",
+            scheduler="none",
+        ),
+        extra_config_fields=[
+            "d_model", "n_heads", "e_layers", "d_ff", "dropout",
+            "factor", "activation", "patch_len", "stride",
+            "embed", "freq", "task_name",
+        ],
+        forward_signature="tsl",
+    ),
+    # Future backbones (TimeMixer, TimeXer, ...) get appended here.
 }
 
 
