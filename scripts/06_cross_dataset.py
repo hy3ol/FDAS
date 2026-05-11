@@ -70,7 +70,7 @@ def main():
     args = parser.parse_args()
     metric_prod, metric_base, metric_label = METRIC_COLS[args.metric]
 
-    metrics_path = METRICS_DIR / f"per_dataset_metrics__{args.backbone}.csv"
+    metrics_path = METRICS_DIR / args.backbone / "per_dataset_metrics.csv"
     out_dir = OUT_DIR_BASE / args.backbone
 
     if not metrics_path.exists():
