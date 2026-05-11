@@ -63,11 +63,15 @@ def already_done(key: str, backbone: str) -> bool:
 
 
 def run_analysis_pipeline(backbone: str) -> int:
+    # Main analysis path: 04 (score: D_w_z) → 05 (per-dataset metrics CSV).
+    # 06_cross_dataset.py (D_w_z vs D_w paired comparison) and
+    # 07_visualization.py are no longer part of the production pipeline:
+    # we standardized on D_w_z as the single production score, so the
+    # baseline comparison and per-paper figures are deprecated. 06 still
+    # lives in scripts/ for ad-hoc use; 07 was removed in this vintage.
     for script in [
         "04_score_compute.py",
         "05_metrics.py",
-        "06_cross_dataset.py",
-        "07_visualization.py",
     ]:
         print(f"\n=== {script} (backbone={backbone}) ===")
         rc = _run([sys.executable, str(SCRIPT_DIR / script),
