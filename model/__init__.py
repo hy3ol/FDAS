@@ -20,6 +20,7 @@ from . import DLinear as _dlinear
 from . import PatchTST as _patchtst
 from . import TimeMixer as _timemixer
 from . import TimesNet as _timesnet
+from . import TimeXer as _timexer
 
 DEFAULT_BACKBONE = "iTransformer"
 
@@ -235,7 +236,55 @@ BACKBONES: dict[str, BackboneSpec] = {
         forward_signature="tsl",
         mark_dim=4,                         # timeF + freq='h' → 4-dim mark
     ),
-    # Future backbones (TimeXer, Chronos, TimesFM, ...) get appended here.
+    # ── TimeXer (Wang et al., NeurIPS 2024). ───────────────────────────
+    # Vendored verbatim from thuml/Time-Series-Library `models/TimeXer.py`
+    # — no import rewrites needed since TimeXer only depends on
+    # `layers.SelfAttention_Family` and `layers.Embed`, both already
+    # present in V13/layers/ (shared TSL standard, used by iTransformer).
+    #
+    # features="M" routes through forecast_multi() — all channels are
+    # both endogenous (en_embedding, patched) and exogenous (ex_embedding,
+    # inverted) in turn. patch_len=16 with L=192 → 12 patches + 1 global
+    # token. use_norm=1 enables Non-stationary Transformer normalization
+    # (paper default).
+    "TimeXer": BackboneSpec(
+        name="TimeXer",
+        model_factory=lambda cfg: _timexer.Model(cfg),
+        default_model_hps=dict(
+            # Architecture (NeurIPS'24 paper Appendix B)
+            d_model=256,
+            n_heads=8,
+            e_layers=2,
+            d_ff=512,
+            dropout=0.1,
+            factor=1,
+            activation="gelu",
+            # TimeXer-specific
+            patch_len=16,                   # L=192 / 16 = 12 patches
+            use_norm=1,                     # 1 = Non-stationary normalization
+            features="M",                   # multivariate (use forecast_multi)
+            # TSL signature stubs
+            embed="timeF",
+            freq="h",
+            task_name="long_term_forecast",
+        ),
+        default_training_hps=dict(
+            batch_size=32,                  # paper default (4-32 dataset dependent)
+            learning_rate=1e-4,             # NeurIPS'24 paper Appendix B
+            num_epochs=10,
+            patience=3,
+            optimizer="adam",
+            scheduler="none",
+        ),
+        extra_config_fields=[
+            "d_model", "n_heads", "e_layers", "d_ff", "dropout",
+            "factor", "activation",
+            "patch_len", "use_norm", "features",
+            "embed", "freq", "task_name",
+        ],
+        forward_signature="tsl",
+    ),
+    # Future backbones (Chronos, TimesFM, Moirai, ...) get appended here.
 }
 
 
