@@ -23,6 +23,7 @@ from . import TimesNet as _timesnet
 from . import TimeXer as _timexer
 from . import TimesFM as _timesfm
 from . import TTM as _ttm
+from . import Moirai as _moirai
 
 DEFAULT_BACKBONE = "iTransformer"
 
@@ -368,7 +369,49 @@ BACKBONES: dict[str, BackboneSpec] = {
         forward_signature="tsl",
         is_zero_shot=True,
     ),
-    # Future backbones (Chronos, Moirai, ...) get appended here.
+    # ── Moirai-1.1-R-small (Woo et al., ICLR 2024). ────────────────────
+    # Salesforce's MoiraiForecast — ~14M-parameter encoder-only Transformer
+    # with **any-variate attention**: each (timestep, channel) pair is a
+    # separate token, and cross-channel dependency is modeled inside the
+    # attention. Truly multivariate-native (different architecture from
+    # TTM-r2's MLP-Mixer channel-mixing).
+    #
+    # Loaded from HuggingFace `Salesforce/moirai-1.1-R-small`. Pretrained
+    # on Salesforce LOTSA (27B observations), distinct corpus from IBM's
+    # TSPulse used for TTM-r2 — so this row also varies the pretraining
+    # data axis, not just architecture.
+    #
+    # patch_size=16 gives 192/16=12 input patches + 96/16=6 output patches,
+    # the paper-recommended default for hourly-resolution data. Moirai is
+    # probabilistic; the wrapper takes the median over num_samples=20 to
+    # produce a point forecast in V13's (B, H, C) contract. See
+    # `model/Moirai/moirai_wrapper.py` for details.
+    #
+    # Zero-shot ⇒ no training. is_zero_shot=True routes 02_train.py to
+    # skip the train loop, mirroring TimesFM/TTM-r2.
+    "Moirai": BackboneSpec(
+        name="Moirai",
+        model_factory=lambda cfg: _moirai.Model(cfg),
+        default_model_hps=dict(
+            # Wrapper hard-codes patch_size=16 and num_samples=20; both are
+            # paper-standard for L=192/H=96 inference. Exposed here only so
+            # train_config.json captures them.
+            moirai_patch_size=16,
+            moirai_num_samples=20,
+        ),
+        default_training_hps=dict(
+            batch_size=64,                  # outer DataLoader batch
+            learning_rate=0.0,              # unused (zero-shot)
+            num_epochs=0,                   # unused (zero-shot)
+            patience=0,
+            optimizer="adam",
+            scheduler="none",
+        ),
+        extra_config_fields=["moirai_patch_size", "moirai_num_samples"],
+        forward_signature="tsl",
+        is_zero_shot=True,
+    ),
+    # Future backbones (Chronos, Moirai-MoE, ...) get appended here.
 }
 
 

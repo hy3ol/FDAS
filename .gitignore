@@ -53,6 +53,10 @@ results/04_score_compute_log__*.csv
 *.swp
 *~
 
+# pdflatex byproducts (from compiling results/00_result_table/*.tex)
+results/00_result_table/*/*.aux
+results/00_result_table/*/*.log
+
 # Tracked (do not gitignore these — listed for clarity):
 #   scripts/                                        — production pipeline
 #   ablations/scripts/                              — experiments

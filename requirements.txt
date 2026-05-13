@@ -1,21 +1,42 @@
-# Deep Learning Framework
-torch>=2.2.0
+# V13 FDAS — Forecast Disagreement Anomaly Score
+# Python dependencies.
+#
+# IMPORTANT: foundation-model packages (uni2ts, granite-tsfm) pin
+# incompatible torch versions in their metadata. Install order matters.
+# See SETUP.md for the recommended install sequence.
 
-# Data Processing
-pandas>=2.0.0
-numpy>=1.24.0
+# ── Deep learning core ───────────────────────────────────────────────
+# torch 2.8.0 + cu128 — required for NVIDIA Blackwell (RTX 5090, sm_120).
+# Earlier torch builds (e.g. 2.4.x) target cu121 and lack sm_120 kernels.
+# torch<2.9 keeps us inside granite-tsfm's allowed range. uni2ts's
+# torch<2.5 pin is metadata-only and Moirai works fine at 2.8.0 (install
+# uni2ts with --no-deps).
+torch==2.8.0
+torchvision==0.23.0
+
+# ── Forecasting-backbone source deps (vendored TSL/LTSF code) ────────
+einops>=0.8.0
+
+# ── Foundation-model backbones (zero-shot) ───────────────────────────
+# Loaded as pip packages; weights auto-download from HuggingFace on
+# first run (cached under ~/.cache/huggingface).
+granite-tsfm==0.3.3        # TTM-r2 (IBM Granite Tiny Time Mixer, multivariate-native)
+timesfm                    # TimesFM-1.0-200M (Google) — channel-wise univariate, kept as baseline
+uni2ts==2.0.0              # Moirai-1.1-R-small (Salesforce, multivariate-native any-variate attention)
+                           # Install with --no-deps to skip its torch<2.5 pin (see SETUP.md).
+
+# ── Data processing ──────────────────────────────────────────────────
+pandas>=2.2.0
+numpy>=1.24.0,<3
 scikit-learn>=1.3.0
 scipy>=1.11.0
 
-# Visualization
+# ── Visualization ────────────────────────────────────────────────────
 matplotlib>=3.8.0
 seaborn>=0.13.0
 
-# Forecasting backbone (iTransformer ops)
-einops>=0.7.0
-
-# I/O
-pyarrow>=14.0.0      # parquet support for pandas (results/{key}/scores.parquet)
+# ── I/O ──────────────────────────────────────────────────────────────
+pyarrow>=14.0.0            # parquet support for pandas (results/{key}/{backbone}/scores.parquet)
 tqdm>=4.66.0
 
 # ── External: TSB-AD evaluation library ──────────────────────────────
