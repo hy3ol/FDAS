@@ -44,18 +44,24 @@ def _run(cmd: list[str], log_path: Path | None = None) -> int:
     return proc.returncode
 
 
-def train_one_dataset(dataset_key: str, backbone: str) -> int:
+def train_one_dataset(dataset_key: str, backbone: str,
+                      batch_size: int | None = None) -> int:
     log = LOGS_DIR / backbone / f"{dataset_key}_train_infer.log"
     rc = _run([sys.executable, str(SCRIPT_DIR / "01_data_preparation.py"),
                "--dataset-key", dataset_key], log_path=log)
     if rc != 0:
         return rc
-    rc = _run([sys.executable, str(SCRIPT_DIR / "02_train.py"),
-               "--backbone", backbone], log_path=log)
+    train_args = [sys.executable, str(SCRIPT_DIR / "02_train.py"),
+                  "--backbone", backbone]
+    infer_args = [sys.executable, str(SCRIPT_DIR / "03_inference.py"),
+                  "--backbone", backbone]
+    if batch_size is not None:
+        train_args += ["--batch-size", str(batch_size)]
+        infer_args += ["--batch-size", str(batch_size)]
+    rc = _run(train_args, log_path=log)
     if rc != 0:
         return rc
-    return _run([sys.executable, str(SCRIPT_DIR / "03_inference.py"),
-                 "--backbone", backbone], log_path=log)
+    return _run(infer_args, log_path=log)
 
 
 def already_done(key: str, backbone: str) -> bool:
@@ -92,6 +98,11 @@ def main():
     parser.add_argument("--backbone", type=str, default="iTransformer",
                         help="Backbone name (default: iTransformer). Must be "
                              "registered in V13/model/__init__.py.")
+    parser.add_argument("--batch-size", type=int, default=None,
+                        help="Override DataLoader batch size for both 02_train "
+                             "and 03_inference. Default lets each script use "
+                             "its own default (64). Foundation backbones with "
+                             "heavy attention (e.g. Moirai) need lower values.")
     args = parser.parse_args()
 
     if not (args.datasets or args.all_keys or args.analyze):
@@ -113,7 +124,7 @@ def main():
             print(f"  SKIP (predictions_test.npy already exists for backbone={args.backbone})")
             skipped.append(k)
             continue
-        rc = train_one_dataset(k, args.backbone)
+        rc = train_one_dataset(k, args.backbone, batch_size=args.batch_size)
         if rc != 0:
             print(f"  [{k}] FAILED (rc={rc})")
             failures.append(k)

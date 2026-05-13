@@ -9,8 +9,15 @@ purely from the model's own multi-horizon forecast disagreement —
 **without ever observing the actual value $y_t$ at scoring time**.
 Backbone is **pluggable**: iTransformer is the reference implementation,
 but any multi-horizon forecaster with a Time-Series-Library (TSL) style
-forward signature can be slotted in with a 3-line registry entry. Evaluated
-on TSB-AD-M (200 datasets, 17 families).
+forward signature can be slotted in with a 3-line registry entry —
+including *zero-shot foundation models* like Moirai, TTM-r2, TimesFM.
+Evaluated on TSB-AD-M (200 datasets, 17 families).
+
+**9 backbones currently registered** — 6 trained from scratch (DLinear,
+iTransformer, PatchTST, TimeMixer, TimesNet, TimeXer) and 3 zero-shot
+foundation models (TimesFM, TTM-r2, Moirai-1.1-R). Best paper-grade
+result on the 180-subset: **FDAS TTM-r2** at VUS-PR 0.34
+(beats all 23 TSB-AD-M baselines + every trained FDAS row).
 
 ## Method overview
 
@@ -54,13 +61,19 @@ prediction tensor that any registered backbone produces.
 ├── .gitignore                             — generated/large artifacts excluded
 │
 ├── model/                                 — backbone registry + implementations
-│   ├── __init__.py                        — BACKBONES dict (5 registered)
-│   ├── base.py                            — BackboneSpec dataclass
-│   ├── DLinear.py                         — vendored verbatim from LTSF-Linear
-│   ├── iTransformer/                      — vendored verbatim from TSL
-│   ├── PatchTST/                          — vendored verbatim from TSL
-│   ├── TimeMixer/                         — vendored verbatim from TSL
-│   └── TimesNet/                          — vendored verbatim from TSL
+│   ├── __init__.py                        — BACKBONES dict (9 registered)
+│   ├── base.py                            — BackboneSpec (incl. `is_zero_shot` flag)
+│   │   — Trained backbones (vendored verbatim from source) —
+│   ├── DLinear.py                         — LTSF-Linear (Zeng et al., AAAI 2023)
+│   ├── iTransformer/                      — Time-Series-Library (Liu et al., ICLR 2024)
+│   ├── PatchTST/                          — Time-Series-Library (Nie et al., ICLR 2023)
+│   ├── TimeMixer/                         — Time-Series-Library (Wang et al., ICLR 2024)
+│   ├── TimesNet/                          — Time-Series-Library (Wu et al., ICLR 2023)
+│   ├── TimeXer/                           — Time-Series-Library (Wang et al., NeurIPS 2024)
+│   │   — Zero-shot foundation models (thin pip-package wrappers) —
+│   ├── TimesFM/                           — google/timesfm-1.0-200m-pytorch (univariate, baseline)
+│   ├── TTM/                               — ibm-granite/granite-timeseries-ttm-r2 (multivariate)
+│   └── Moirai/                            — Salesforce/moirai-1.1-R-small (multivariate any-variate)
 ├── layers/                                — TSL standard layers (vendored)
 ├── utils/                                 — vendored helpers
 │
@@ -74,7 +87,10 @@ prediction tensor that any registered backbone produces.
 │   ├── 04_score_compute.py                — D_w + D_w_z (--backbone)
 │   ├── 05_metrics.py                      — TSB-AD-M metrics on full series (--backbone)
 │   ├── 06_cross_dataset.py                — ad-hoc D_w vs D_w_z paired comparison (not in production pipeline)
-│   ├── run_all.py                         — end-to-end driver (--backbone)
+│   ├── run_all.py                         — end-to-end driver (--backbone, --batch-size)
+│   ├── _run_timesfm_full.sh               — full-benchmark runner for TimesFM (OPP batch override)
+│   ├── _run_ttm_full.sh                   — full-benchmark runner for TTM-r2 (OPP batch override)
+│   ├── _run_moirai_full.sh                — full-benchmark runner for Moirai (OPP batch override)
 │   └── migrate_to_backbone_layout.py      — one-shot legacy → per-backbone mv (kept for new-backbone bootstrap)
 │
 ├── ablations/                             — experimental scripts + outputs
@@ -117,16 +133,16 @@ describes the data split, which is backbone-independent).
 
 ### Install
 
-```bash
-pip install -r requirements.txt
-```
-
-**External dependency — TSB-AD** (evaluation metrics library; not on
-PyPI). Install from source as a sibling clone:
+See [`SETUP.md`](SETUP.md) for the full sequence (Blackwell-compatible
+torch, foundation-model packages with `--no-deps` for `uni2ts`, etc.).
+Short version:
 
 ```bash
-git clone https://github.com/TheDatumOrg/TSB-AD ../TSB-AD
-pip install -e ../TSB-AD
+python3.10 -m venv .venv && source .venv/bin/activate
+pip install "torch==2.8.0" "torchvision==0.23.0"      # Blackwell sm_120
+pip install -r requirements.txt                        # core deps
+pip install --no-deps "uni2ts==2.0.0"                  # Moirai (avoid torch<2.5 downgrade)
+git clone https://github.com/TheDatumOrg/TSB-AD ../TSB-AD && pip install -e ../TSB-AD
 ```
 
 `scripts/05_metrics.py` calls `TSB_AD.evaluation.metrics.get_metrics`
@@ -257,10 +273,33 @@ Results land in `results/<dataset_key>/DLinear/...` and
 `results/04_metrics/DLinear/per_dataset_metrics.csv`. Other backbones'
 artifacts are untouched, so you can compare side-by-side immediately.
 
-**Currently registered**: DLinear, iTransformer, PatchTST, TimeMixer,
-TimesNet — all 5 trained and evaluated on the full 200-dataset TSB-AD-M
-benchmark. See [`results/00_result_table/`](results/00_result_table/)
+**Currently registered (9 backbones)**:
+
+| Backbone | Type | Params | Native multivariate? | Notes |
+|---|---|---|---|---|
+| DLinear | trained | 31K | ✓ | LTSF-Linear baseline (Zeng et al., AAAI'23) |
+| iTransformer | trained | 5M | ✓ | reference implementation (Liu et al., ICLR'24) |
+| PatchTST | trained | 6M | ✓ | patched Transformer (Nie et al., ICLR'23) |
+| TimeMixer | trained | 0.1M | ✓ | multi-scale mixing (Wang et al., ICLR'24) |
+| TimesNet | trained | 1.4M | ✓ | 2D period folding (Wu et al., ICLR'23) |
+| TimeXer | trained | 4M | ✓ | endo/exo patching (Wang et al., NeurIPS'24) |
+| TimesFM | zero-shot | 200M | ✗ univariate loop | google/timesfm-1.0-200m (baseline) |
+| TTM-r2 | zero-shot | 805K | ✓ channel-mixing | ibm-granite/granite-timeseries-ttm-r2 |
+| Moirai | zero-shot | 14M | ✓ any-variate | Salesforce/moirai-1.1-R-small |
+
+All 9 evaluated on the full 200-dataset TSB-AD-M benchmark. Foundation
+models use `is_zero_shot=True`, which skips 02_train's loop and writes a
+minimal checkpoint so the rest of the pipeline (03 → 04 → 05) stays
+backbone-agnostic. See [`results/00_result_table/`](results/00_result_table/)
 for the paper-grade comparison tables.
+
+**Adding a foundation model.** Use the TTM/Moirai pattern: vendor a thin
+wrapper in `model/<Name>/` that loads a pretrained pip-package model and
+adapts its `forward` to V13's TSL signature, override `state_dict() → {}`
+so per-dataset checkpoints stay small (HF cache holds the weights), then
+register with `is_zero_shot=True`. The framework rejects univariate-per-
+channel foundation models for paper-grade rows — TimesFM is kept only as
+a published baseline; new foundation backbones must be multivariate-native.
 
 ## Key design choices
 
