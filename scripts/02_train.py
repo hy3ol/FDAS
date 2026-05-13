@@ -194,6 +194,41 @@ def train_model(backbone_name: str, overrides: dict | None = None):
     print(f"    Total parameters: {total_params:,}")
     print(f"    Trainable parameters: {trainable_params:,}")
 
+    # Zero-shot foundation models skip the training loop entirely. We
+    # still write checkpoint.pth (with an empty / minimal state_dict —
+    # the wrapper reloads weights from HF cache) so 03_inference and the
+    # rest of the V13 pipeline run unchanged.
+    if backbone_spec.is_zero_shot:
+        print("\n[4] Zero-shot foundation model — skipping training loop.")
+        checkpoint_payload = {
+            "epoch": 0,
+            "backbone": backbone_name,
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": {},
+            "train_loss": 0.0,
+            "val_loss": 0.0,
+            "config": export_train_config(config, backbone_spec),
+            "is_zero_shot": True,
+        }
+        torch.save(checkpoint_payload, os.path.join(models_dir, "best_model.pth"))
+        torch.save(checkpoint_payload, os.path.join(models_dir, "checkpoint.pth"))
+        history = {
+            "backbone": backbone_name,
+            "train_losses": [],
+            "val_losses": [],
+            "best_val_loss": 0.0,
+            "best_epoch": 0,
+            "epochs_trained": 0,
+            "early_stopped": False,
+            "patience": 0,
+            "is_zero_shot": True,
+        }
+        with open(os.path.join(models_dir, "training_history.json"), "w") as f:
+            json.dump(history, f, indent=4)
+        print("    ✓ checkpoint.pth written (zero-shot, no weights stored)")
+        print("\n" + "=" * 60)
+        return model, history
+
     # Loss / optimizer / scheduler — all driven by config (backbone HPs)
     criterion = nn.MSELoss()
     optimizer = _build_optimizer(model, config)

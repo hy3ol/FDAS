@@ -59,6 +59,13 @@ class BackboneSpec:
        'tsl'    → model(x_enc, x_mark_enc, x_dec, x_mark_dec)  (iTransformer, PatchTST, ...)
        'x_only' → model(x_enc)                                  (DLinear, etc., if added)"""
 
+    is_zero_shot: bool = False
+    """If True, the backbone is a pretrained foundation model evaluated
+    without any dataset-specific training. 02_train.py skips the train
+    loop and writes a minimal checkpoint.pth so the rest of the V13
+    pipeline can proceed unchanged. Used by TimesFM and other zero-shot
+    foundation models."""
+
     mark_dim: int = 1
     """Number of channels in the dummy time-mark tensor (x_mark, y_mark).
 

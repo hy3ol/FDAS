@@ -21,6 +21,7 @@ from . import PatchTST as _patchtst
 from . import TimeMixer as _timemixer
 from . import TimesNet as _timesnet
 from . import TimeXer as _timexer
+from . import TimesFM as _timesfm
 
 DEFAULT_BACKBONE = "iTransformer"
 
@@ -284,7 +285,51 @@ BACKBONES: dict[str, BackboneSpec] = {
         ],
         forward_signature="tsl",
     ),
-    # Future backbones (Chronos, TimesFM, Moirai, ...) get appended here.
+    # ── TimesFM-1.0-200M (Das et al., ICLR 2024). ──────────────────────
+    # Decoder-only foundation forecaster from Google Research. Zero-shot:
+    # we load the pretrained 200M-parameter checkpoint from HuggingFace
+    # (`google/timesfm-1.0-200m-pytorch`) and forecast each channel
+    # independently, with no dataset-specific training.
+    #
+    # The wrapper lives in `model/TimesFM/timesfm_wrapper.py`. Because
+    # weights are reloaded from the HF cache on each `from_pretrained`,
+    # the per-dataset checkpoint.pth stays ~100B (state_dict overridden
+    # to {}). 02_train.py detects `is_zero_shot=True` and skips the train
+    # loop; the rest of the V13 pipeline (03 → 04 → 05) is unchanged.
+    "TimesFM": BackboneSpec(
+        name="TimesFM",
+        model_factory=lambda cfg: _timesfm.Model(cfg),
+        default_model_hps=dict(
+            # TimesFM-1.0 fixed architecture (paper Table 1)
+            input_patch_len=32,
+            output_patch_len=128,
+            num_layers=20,
+            model_dims=1280,
+        ),
+        default_training_hps=dict(
+            batch_size=32,                  # outer DataLoader batch
+            tfm_batch=512,                  # internal per_core_batch_size
+            # tfm_batch=512 trades GPU memory for throughput. TimesFM's
+            # inference memory is dominated by the 800MB model weights;
+            # patches=6 means attention is tiny (6² = 36) so activations
+            # grow linearly with batch but stay sub-GB. Measured peak ~3GB
+            # at 256 → ~3.5GB at 512 on a 32GB GPU, well within headroom.
+            # Per-series forward is independent — batch size does not
+            # affect numerical results beyond fp32 reduction order (<1e-7).
+            learning_rate=0.0,              # unused (zero-shot)
+            num_epochs=0,                   # unused (zero-shot)
+            patience=0,
+            optimizer="adam",
+            scheduler="none",
+        ),
+        extra_config_fields=[
+            "input_patch_len", "output_patch_len",
+            "num_layers", "model_dims", "tfm_batch",
+        ],
+        forward_signature="tsl",            # wrapper.forward accepts TSL args
+        is_zero_shot=True,
+    ),
+    # Future backbones (Chronos, Moirai, TTM, ...) get appended here.
 }
 
 
