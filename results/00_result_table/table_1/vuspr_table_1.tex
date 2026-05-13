@@ -13,10 +13,10 @@
 \toprule
 \textbf{Method} & \textbf{AUC-PR} & \textbf{AUC-ROC} & \textbf{VUS-PR} & \textbf{VUS-ROC} & \textbf{Standard-F1} & \textbf{PA-F1} \\
 \midrule
-CNN                    & \textbf{0.32} & \textbf{0.73} & \textbf{0.31} & \textbf{0.76} & \textbf{0.37} & \underline{0.78} \\
-OmniAnomaly            & \underline{0.27} & \underline{0.65} & \textbf{0.31} & \underline{0.69} & \underline{0.32} & 0.55 \\
-PCA                    & \underline{0.31} & \underline{0.70} & \textbf{0.31} & \underline{0.74} & \textbf{0.37} & \textbf{0.79} \\
-LSTMAD                 & \underline{0.31} & \underline{0.70} & \textbf{0.31} & \underline{0.74} & \underline{0.36} & \textbf{0.79} \\
+CNN                    & \textbf{0.32} & \textbf{0.73} & \underline{0.31} & \textbf{0.76} & \textbf{0.37} & \underline{0.78} \\
+OmniAnomaly            & \underline{0.27} & \underline{0.65} & \underline{0.31} & \underline{0.69} & \underline{0.32} & 0.55 \\
+PCA                    & \underline{0.31} & \underline{0.70} & \underline{0.31} & \underline{0.74} & \textbf{0.37} & \textbf{0.79} \\
+LSTMAD                 & \underline{0.31} & \underline{0.70} & \underline{0.31} & \underline{0.74} & \underline{0.36} & \textbf{0.79} \\
 USAD                   & \underline{0.26} & \underline{0.64} & \underline{0.30} & \underline{0.68} & \underline{0.31} & 0.53 \\
 AutoEncoder            & \underline{0.30} & \underline{0.67} & \underline{0.30} & \underline{0.69} & \underline{0.34} & \underline{0.60} \\
 KMeansAD               & \underline{0.25} & \underline{0.69} & \underline{0.29} & \underline{0.73} & \underline{0.31} & \underline{0.68} \\
@@ -24,7 +24,7 @@ CBLOF                  & \underline{0.28} & \underline{0.67} & \underline{0.27} 
 MCD                    & \underline{0.27} & \underline{0.65} & \underline{0.27} & \underline{0.69} & \underline{0.33} & 0.46 \\
 OCSVM                  & 0.23 & \underline{0.61} & \underline{0.26} & \underline{0.67} & \underline{0.28} & 0.48 \\
 Donut                  & 0.20 & \underline{0.64} & \underline{0.26} & \underline{0.71} & \underline{0.28} & 0.52 \\
-RobustPCA              & \underline{0.24} & \underline{0.58} & \underline{0.24} & \underline{0.61} & \underline{0.29} & \underline{0.60} \\
+RobustPCA              & \underline{0.24} & \underline{0.58} & 0.24 & \underline{0.61} & \underline{0.29} & \underline{0.60} \\
 FITS                   & 0.15 & \underline{0.58} & 0.21 & \underline{0.66} & 0.22 & \underline{0.72} \\
 OFA                    & 0.15 & \underline{0.55} & 0.21 & \underline{0.63} & 0.21 & \underline{0.72} \\
 EIF                    & 0.19 & \underline{0.67} & 0.21 & \underline{0.71} & 0.26 & \underline{0.74} \\
@@ -41,10 +41,11 @@ AnomalyTransformer     & 0.07 & 0.52 & 0.12 & 0.57 & 0.12 & 0.53 \\
 \textbf{FDAS TimesNet} & 0.23 & \underline{0.69} & \underline{0.28} & \underline{0.74} & \underline{0.31} & 0.57 \\
 \textbf{FDAS PatchTST} & 0.23 & \underline{0.66} & \underline{0.29} & \underline{0.71} & \underline{0.30} & 0.57 \\
 \textbf{FDAS iTransformer} & \underline{0.24} & \underline{0.69} & \underline{0.30} & \underline{0.74} & \underline{0.32} & \underline{0.61} \\
-\textbf{FDAS TimeMixer} & \underline{0.25} & \underline{0.70} & \textbf{0.31} & \textbf{0.76} & \underline{0.32} & \underline{0.60} \\
+\textbf{FDAS TimeMixer} & \underline{0.25} & \underline{0.70} & \underline{0.31} & \textbf{0.76} & \underline{0.32} & \underline{0.60} \\
 \textbf{FDAS TimeXer} & \underline{0.24} & \underline{0.69} & \underline{0.30} & \underline{0.74} & \underline{0.32} & 0.59 \\
 \midrule
-\textbf{FDAS TimesFM} & \underline{0.25} & \underline{0.67} & \textbf{0.31} & \underline{0.73} & \underline{0.32} & \underline{0.61} \\
+\textbf{FDAS TimesFM} & \underline{0.25} & \underline{0.67} & \underline{0.31} & \underline{0.73} & \underline{0.32} & \underline{0.61} \\
+\textbf{FDAS TTM-r2} & \underline{0.28} & \underline{0.69} & \textbf{0.34} & \underline{0.74} & \underline{0.35} & \underline{0.60} \\
 \bottomrule
 \end{tabular}
 

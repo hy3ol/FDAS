@@ -22,6 +22,7 @@ from . import TimeMixer as _timemixer
 from . import TimesNet as _timesnet
 from . import TimeXer as _timexer
 from . import TimesFM as _timesfm
+from . import TTM as _ttm
 
 DEFAULT_BACKBONE = "iTransformer"
 
@@ -329,7 +330,45 @@ BACKBONES: dict[str, BackboneSpec] = {
         forward_signature="tsl",            # wrapper.forward accepts TSL args
         is_zero_shot=True,
     ),
-    # Future backbones (Chronos, Moirai, TTM, ...) get appended here.
+    # ── TTM-r2 (Ekambaram et al., NeurIPS 2024). ───────────────────────
+    # IBM Granite Tiny Time Mixer r2 — ~805K-parameter multivariate
+    # channel-mixing foundation forecaster from `ibm-granite/granite-
+    # timeseries-ttm-r2`. Unlike TimesFM (channel-wise univariate), TTM-r2
+    # is multivariate-native, which is more aligned with TSB-AD-M's
+    # multi-channel anomaly setting.
+    #
+    # TTM-r2's public checkpoints exist at native (context, horizon) pairs:
+    # (512, 96), (1024, 96), (1536, 96), (512, 192), ... — no (192, 96)
+    # variant. V13 is fixed at L=192/H=96, so the wrapper loads 512-96-r2
+    # and left-zero-pads x_enc up to 512, with `past_observed_mask`=1 only
+    # on the last 192 positions so TTM's scaler ignores the pad. See
+    # `model/TTM/ttm_wrapper.py` for details.
+    #
+    # Zero-shot ⇒ no training. is_zero_shot=True routes 02_train.py to
+    # write a minimal checkpoint.pth and skip the train loop, mirroring
+    # the TimesFM pattern. Pretrained weights live in the HF cache.
+    "TTM": BackboneSpec(
+        name="TTM",
+        model_factory=lambda cfg: _ttm.Model(cfg),
+        default_model_hps=dict(
+            # TTM-r2 512-96-r2 fixed architecture (paper / HF card).
+            # No tunables exposed in zero-shot mode; the wrapper hard-codes
+            # context=512 (padded from V13's 192) and prediction=96.
+            ttm_context_len=512,
+        ),
+        default_training_hps=dict(
+            batch_size=128,                 # outer DataLoader batch
+            learning_rate=0.0,              # unused (zero-shot)
+            num_epochs=0,                   # unused (zero-shot)
+            patience=0,
+            optimizer="adam",
+            scheduler="none",
+        ),
+        extra_config_fields=["ttm_context_len"],
+        forward_signature="tsl",
+        is_zero_shot=True,
+    ),
+    # Future backbones (Chronos, Moirai, ...) get appended here.
 }
 
 
