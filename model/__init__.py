@@ -29,6 +29,13 @@ DEFAULT_BACKBONE = "iTransformer"
 
 BACKBONES: dict[str, BackboneSpec] = {
     # ── iTransformer (Liu et al., ICLR 2024). ──────────────────────────
+    # Vendored verbatim from thuml/Time-Series-Library `models/iTransformer.py`
+    # (with TSL layer imports rewritten to `from ._layers import ...` for
+    # folder self-containment).
+    #
+    # `model/iTransformer/_layers.py` bundles DataEmbedding_inverted,
+    # Encoder/EncoderLayer, FullAttention/AttentionLayer (all TSL verbatim).
+    #
     # Model HPs and training HPs match V13's pre-refactor 02_train.py
     # exactly, so re-running --backbone iTransformer is a no-op for any
     # already-trained dataset.
@@ -92,15 +99,11 @@ BACKBONES: dict[str, BackboneSpec] = {
     ),
     # ── PatchTST (Nie et al., ICLR 2023). ──────────────────────────────
     # Vendored verbatim from thuml/Time-Series-Library `models/PatchTST.py`
-    # (with only `from layers.Embed import PatchEmbedding` rewritten to
-    # `from .patch_embedding import PatchEmbedding` to make this model
-    # folder self-contained).
+    # (with TSL layer imports rewritten to `from ._layers import ...` for
+    # folder self-containment).
     #
-    # PatchEmbedding + PositionalEmbedding are vendored into
-    # `model/PatchTST/patch_embedding.py` (also verbatim from TSL).
-    # The other two TSL dependencies (`Encoder/EncoderLayer` and
-    # `FullAttention/AttentionLayer`) are already in V13/layers/ from the
-    # iTransformer vintage — shared TSL standard.
+    # `model/PatchTST/_layers.py` bundles PatchEmbedding, PositionalEmbedding,
+    # Encoder/EncoderLayer, FullAttention/AttentionLayer (all TSL verbatim).
     #
     # patch_len=16, stride=8 are PatchTST.Model.__init__ defaults (paper
     # values for L=192); we set them via lambda so train_config.json
@@ -196,12 +199,13 @@ BACKBONES: dict[str, BackboneSpec] = {
     ),
     # ── TimesNet (Wu et al., ICLR 2023). ───────────────────────────────
     # Vendored verbatim from thuml/Time-Series-Library `models/TimesNet.py`
-    # (with `from layers.Conv_Blocks import Inception_Block_V1` rewritten
-    # to `from ._layers import Inception_Block_V1`). DataEmbedding is
-    # imported from V13/layers/Embed.py (shared TSL standard).
+    # (with TSL layer imports rewritten to `from ._layers import ...` for
+    # folder self-containment).
     #
-    # `model/TimesNet/_layers.py` bundles Inception_Block_V1 + V2 (TSL verbatim).
-    # top_k=5 picks the dominant 5 periods (paper default). num_kernels=6 is
+    # `model/TimesNet/_layers.py` bundles Inception_Block_V1 + V2 and the
+    # DataEmbedding family (TokenEmbedding, PositionalEmbedding,
+    # TemporalEmbedding, TimeFeatureEmbedding, FixedEmbedding) — all TSL
+    # verbatim. top_k=5 picks the dominant 5 periods (paper default). num_kernels=6 is
     # the Inception_Block default. d_model=32, d_ff=32 keeps this heavy
     # CNN-on-period-folding model trainable across 200 datasets at reasonable
     # cost (paper uses up to d_model=64 per-dataset).
@@ -241,9 +245,11 @@ BACKBONES: dict[str, BackboneSpec] = {
     ),
     # ── TimeXer (Wang et al., NeurIPS 2024). ───────────────────────────
     # Vendored verbatim from thuml/Time-Series-Library `models/TimeXer.py`
-    # — no import rewrites needed since TimeXer only depends on
-    # `layers.SelfAttention_Family` and `layers.Embed`, both already
-    # present in V13/layers/ (shared TSL standard, used by iTransformer).
+    # (with TSL layer imports rewritten to `from ._layers import ...` for
+    # folder self-containment).
+    #
+    # `model/TimeXer/_layers.py` bundles DataEmbedding_inverted,
+    # PositionalEmbedding, FullAttention/AttentionLayer (TSL verbatim).
     #
     # features="M" routes through forecast_multi() — all channels are
     # both endogenous (en_embedding, patched) and exogenous (ex_embedding,

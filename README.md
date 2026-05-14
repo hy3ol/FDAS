@@ -63,8 +63,9 @@ prediction tensor that any registered backbone produces.
 ├── model/                                 — backbone registry + implementations
 │   ├── __init__.py                        — BACKBONES dict (9 registered)
 │   ├── base.py                            — BackboneSpec (incl. `is_zero_shot` flag)
-│   │   — Trained backbones (vendored verbatim from source) —
-│   ├── DLinear.py                         — LTSF-Linear (Zeng et al., AAAI 2023)
+│   │   — Trained backbones (each folder is self-contained:
+│   │     <Name>.py + _layers.py with TSL helpers vendored verbatim) —
+│   ├── DLinear/                           — LTSF-Linear (Zeng et al., AAAI 2023)
 │   ├── iTransformer/                      — Time-Series-Library (Liu et al., ICLR 2024)
 │   ├── PatchTST/                          — Time-Series-Library (Nie et al., ICLR 2023)
 │   ├── TimeMixer/                         — Time-Series-Library (Wang et al., ICLR 2024)
@@ -74,8 +75,6 @@ prediction tensor that any registered backbone produces.
 │   ├── TimesFM/                           — google/timesfm-1.0-200m-pytorch (univariate, baseline)
 │   ├── TTM/                               — ibm-granite/granite-timeseries-ttm-r2 (multivariate)
 │   └── Moirai/                            — Salesforce/moirai-1.1-R-small (multivariate any-variate)
-├── layers/                                — TSL standard layers (vendored)
-├── utils/                                 — vendored helpers
 │
 ├── scripts/                               — production pipeline (all backbone-aware)
 │   ├── artifact_paths.py                  — path helpers (per-backbone subdirs)
@@ -224,9 +223,10 @@ The full ablation table on a new forecaster is a 3-step change. No
 modification to `01`, `04`, `05`, `06`, `07`, `score_utils.py`, or
 `config_factory.py` is required — they're all backbone-agnostic.
 
-**Step 1 — Drop the model file.** Add `model/<name>.py` with a
+**Step 1 — Drop the model folder.** Add `model/<name>/<name>.py` with a
 `Model(configs)` class following the Time-Series-Library forward
-signature:
+signature (plus `model/<name>/__init__.py` re-exporting `Model`, and
+optionally `model/<name>/_layers.py` with any vendored TSL helpers):
 
 ```python
 class Model(nn.Module):
