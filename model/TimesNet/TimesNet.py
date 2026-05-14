@@ -2,8 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.fft
-from layers.Embed import DataEmbedding
-from ._layers import Inception_Block_V1
+from ._layers import DataEmbedding, Inception_Block_V1
 
 
 def FFT_for_Period(x, k=2):
