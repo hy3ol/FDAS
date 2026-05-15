@@ -67,8 +67,9 @@ horizon ablation lives entirely under `ablations/scripts/horizon_ablation/`:
 ### Run
 
 ```bash
-# Full sweep (default --pred-lens 192 336). ~3-4 hours on a single GPU.
-python ablations/scripts/horizon_ablation/run_horizon_ablation.py
+# Default sweep is H ∈ {192, 336}; add 48 explicitly for the full grid.
+# ~3-4 hours on a single GPU; H=48 alone is ~90 min.
+python ablations/scripts/horizon_ablation/run_horizon_ablation.py --pred-lens 48 192 336
 
 # Single H, single dataset (smoke test)
 python ablations/scripts/horizon_ablation/run_horizon_ablation.py \
@@ -85,6 +86,7 @@ python ablations/scripts/horizon_ablation/aggregate.py
 
 ```
 ablations/results/horizon/
+├── H48/                                 — see H192/ layout
 ├── H192/
 │   ├── <key>/iTransformer/   (predictions_*.npy, scores.parquet, scores_per_ch.npz)
 │   ├── <key>/bundle_meta.json
@@ -94,7 +96,7 @@ ablations/results/horizon/
 ├── H336/                                — same layout
 ├── run_log.csv                          — (H × key) status + per-phase timing
 ├── per_dataset_metrics.csv              — (H × key) × 6 TSB-AD-M metrics
-├── summary.csv                          — H=96 ∪ H=192 ∪ H=336 long-format
+├── summary.csv                          — H ∈ {48, 96, 192, 336} long-format
 └── summary_aggregate.csv                — per-H mean/median + Wilcoxon vs H=96
 ```
 
@@ -103,15 +105,45 @@ ablations/results/horizon/
 Each split needs ≥ `L + H` consecutive timesteps. Datasets shorter than that
 in any of train/val/test are skipped with status `skip_too_short`.
 
-| H | required_span (= L+H) | fittable / 200 |
-|---|---|---|
-| 96 (production) | 288 | 200 |
-| 192 | 384 | 200 |
-| 336 | 528 | 174 (26 skipped — all `train_size=500` datasets) |
+| H | required_span (= L+H) | fittable / 200 | notes |
+|---|---|---|---|
+| **48** | 240 | 200 | All datasets fit (shorter than production). |
+| 96 (production) | 288 | 200 | |
+| 192 | 384 | 200 | |
+| 336 | 528 | 173 | 26 `skip_too_short` (train_size=500 datasets); 1 `skip_oom` (SWaT\_id\_2: predictions tensor ~13 GB × 3 splits > 60 GB RAM). |
 
-The H=336 row in summary tables is computed over the 174-dataset subset; rows
+Per-H summary tables are computed over each $n_\textrm{ok}$ subset; rows
 are aligned by `dataset_key` so paired Wilcoxon vs H=96 in `summary_aggregate.csv`
 uses only datasets that succeeded at both H values.
+
+### Results — H=48 ablation overturns the production default
+
+Headline VUS-PR (micro-average across $n_\textrm{ok}$ datasets):
+
+| H | $n_\textrm{ok}$ | VUS-PR | Δ vs H=96 | paired Wilcoxon p | dataset win/loss vs H=96 |
+|---|:--:|---:|---:|---:|---:|
+| **48** | 200 | **0.3243** | **+0.0215** | 4.6e-07 | **135 wins / 65 losses** |
+| 96 (production) | 200 | 0.3028 | — | — | — |
+| 192 | 200 | 0.2673 | −0.0355 | 3.8e-11 | 63 wins / 137 losses |
+| 336 | 173 | 0.2149 | −0.0592 | 4.0e-12 | 48 wins / 125 losses |
+
+**6 / 6 TSB-AD-M metrics monotonically degrade as H grows from 48 → 336**, with
+H=48 being statistically significantly better than the current production H=96
+on every metric (p < 1e-3 for all; p < 1e-6 for VUS-PR / VUS-ROC / AUC-PR /
+Standard-F1 / PA-F1).
+
+Conclusion: the recency-weighted multi-horizon variance benefits from
+**shorter** forecast horizons. The current production choice of H=96 is
+suboptimal — H=48 yields +0.022 VUS-PR (≈ +7 % relative) with no extra
+inference cost. Whether the trend continues to even shorter H (24, 12, ...)
+is left for future ablation; the recency weight $\lambda^H$ at $\lambda{=}0.99$
+becomes $\approx 0.62$ at H=48 (vs. $\approx 0.38$ at H=96), so weighting is
+already meaningfully active here, but the asymptote at $H{=}1$ degenerates
+to single-horizon prediction error (no disagreement to compute).
+
+See `ablations/results/table/horizon_table_{1,2}.{tex,pdf,png}` for the
+paper-grade tables (overall 6-metric comparison + per-family VUS-PR
+breakdown across all four horizons).
 
 ### Methodological note
 
