@@ -172,7 +172,7 @@ We did not sweep below H=12.
 
 ## Outputs
 
-| CSV (under `./results/`) | Produced by | Schema notes |
+| CSV (under `./results/etc/`) | Produced by | Schema notes |
 |:--|:--|:--|
 | `agg_normalize_per_dataset.csv` | `compare_agg_normalize.py` | Per-dataset × 9 variants × 6 metrics. |
 | `agg_normalize_summary.csv` | `compare_agg_normalize.py` | Cross-dataset means + Wilcoxon. |

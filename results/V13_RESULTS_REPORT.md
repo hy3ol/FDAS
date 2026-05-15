@@ -424,12 +424,12 @@ V13/
 │   │                                  apply_channel_zscore_aggregation)
 │   ├── compare_agg_normalize.py     — 9-variant 비교 harness (multiprocess)
 │   └── _add_val_inference.py        — standalone val inference (보정용)
-├── results/04_metrics/
+├── ablations/results/etc/
 │   ├── agg_normalize_per_dataset.csv  — 199 × (9 variant × 6 metric) 전체 (with-drop)
 │   ├── agg_normalize_summary.csv      — family 평균 (with-drop)
 │   ├── ablation_no_drop_per_dataset.csv  — 199 × (6 variant × 6 metric) no-drop
-│   ├── ablation_no_drop_summary.csv      — family 평균 (no-drop)
-│   └── V13_RESULTS_REPORT.md          — 이 문서
+│   └── ablation_no_drop_summary.csv      — family 평균 (no-drop)
+├── results/V13_RESULTS_REPORT.md      — 이 문서
 └── models/{key}/checkpoint.pth        — best-snapshot 모델 (데이터셋별 1개)
 ```
 
