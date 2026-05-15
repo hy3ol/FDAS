@@ -31,7 +31,7 @@ METRIC_LABELS = {
     "standard_f1": "Standard-F1",
     "pa_f1": "PA-F1",
 }
-HORIZONS = [48, 96, 192, 336]
+HORIZONS = [12, 24, 48, 96, 192, 336]
 # TSB-AD-M family display names; "OPP" abbreviation matches production table_2.
 FAMILY_LABELS = {
     "CATSv2": "CATSv2", "CreditCard": "CreditCard", "Daphnet": "Daphnet",

@@ -107,7 +107,9 @@ in any of train/val/test are skipped with status `skip_too_short`.
 
 | H | required_span (= L+H) | fittable / 200 | notes |
 |---|---|---|---|
-| **48** | 240 | 200 | All datasets fit (shorter than production). |
+| **12** | 204 | 200 | |
+| **24** | 216 | 200 | |
+| **48** | 240 | 200 | |
 | 96 (production) | 288 | 200 | |
 | 192 | 384 | 200 | |
 | 336 | 528 | 173 | 26 `skip_too_short` (train_size=500 datasets); 1 `skip_oom` (SWaT\_id\_2: predictions tensor ~13 GB × 3 splits > 60 GB RAM). |
@@ -116,34 +118,40 @@ Per-H summary tables are computed over each $n_\textrm{ok}$ subset; rows
 are aligned by `dataset_key` so paired Wilcoxon vs H=96 in `summary_aggregate.csv`
 uses only datasets that succeeded at both H values.
 
-### Results — H=48 ablation overturns the production default
+### Results — U-curve, peak at H=24
 
 Headline VUS-PR (micro-average across $n_\textrm{ok}$ datasets):
 
 | H | $n_\textrm{ok}$ | VUS-PR | Δ vs H=96 | paired Wilcoxon p | dataset win/loss vs H=96 |
 |---|:--:|---:|---:|---:|---:|
-| **48** | 200 | **0.3243** | **+0.0215** | 4.6e-07 | **135 wins / 65 losses** |
+| 12 | 200 | 0.3334 | +0.0305 | 1.6e-05 | 133 / 67 |
+| **24** | 200 | **0.3414** | **+0.0385** | 2.0e-09 | **142 / 58** |
+| 48 | 200 | 0.3243 | +0.0215 | 4.6e-07 | 135 / 65 |
 | 96 (production) | 200 | 0.3028 | — | — | — |
-| 192 | 200 | 0.2673 | −0.0355 | 3.8e-11 | 63 wins / 137 losses |
-| 336 | 173 | 0.2149 | −0.0592 | 4.0e-12 | 48 wins / 125 losses |
+| 192 | 200 | 0.2673 | −0.0355 | 3.8e-11 | 63 / 137 |
+| 336 | 173 | 0.2149 | −0.0592 | 4.0e-12 | 48 / 125 |
 
-**6 / 6 TSB-AD-M metrics monotonically degrade as H grows from 48 → 336**, with
-H=48 being statistically significantly better than the current production H=96
-on every metric (p < 1e-3 for all; p < 1e-6 for VUS-PR / VUS-ROC / AUC-PR /
-Standard-F1 / PA-F1).
+**6 / 6 TSB-AD-M metrics form a U-curve with peak at H=24**. H=12 → H=24 →
+H=48 → H=96 → H=192 → H=336 is non-monotonic only at the very-short end:
+H=12 vs H=24 paired Wilcoxon is non-significant across all 6 metrics
+(p > 0.2 for all, $|\Delta\,\textrm{VUS-PR}| = 0.008$), so the
+recency-weighted multi-horizon variance is roughly *flat* between H=12
+and H=24 and then **decreases monotonically with H** beyond H=24.
 
-Conclusion: the recency-weighted multi-horizon variance benefits from
-**shorter** forecast horizons. The current production choice of H=96 is
-suboptimal — H=48 yields +0.022 VUS-PR (≈ +7 % relative) with no extra
-inference cost. Whether the trend continues to even shorter H (24, 12, ...)
-is left for future ablation; the recency weight $\lambda^H$ at $\lambda{=}0.99$
-becomes $\approx 0.62$ at H=48 (vs. $\approx 0.38$ at H=96), so weighting is
-already meaningfully active here, but the asymptote at $H{=}1$ degenerates
-to single-horizon prediction error (no disagreement to compute).
+Conclusion: the current production choice of H=96 is suboptimal — **H=24
+yields +0.039 VUS-PR (≈ +13 % relative) with no extra inference cost,
+winning 142/200 paired datasets and beating H=96 on all 6 metrics at
+$p < 10^{-4}$**. The optimum sits between the "too short → not enough
+anchors for a meaningful per-step variance estimate" regime (H ≤ 12,
+recency weight $\lambda^H \gtrsim 0.89$ saturates) and the "too long →
+recency weighting collapses" regime (H ≥ 192, $\lambda^H \lesssim 0.15$).
+At H=24, $\lambda^{24} \approx 0.79$ — recency is still meaningfully
+emphasised, while 24 anchors per timestep give a reasonably-stable
+variance estimate.
 
 See `ablations/results/table/horizon_table_{1,2}.{tex,pdf,png}` for the
 paper-grade tables (overall 6-metric comparison + per-family VUS-PR
-breakdown across all four horizons).
+breakdown across all six horizons).
 
 ### Methodological note
 
@@ -152,6 +160,15 @@ $D_{w,c}(t) = \sum_h \tilde w_h (\hat y_t^{(t-h)}[c] - \bar v_t[c])^2$ to near-u
 collapsing the recency-weighted variance to plain variance over a long horizon.
 H=336 (`λ^336 ≈ 0.034`) is already at the edge of the regime where recency
 weighting is meaningful at λ=0.99.
+
+At the short end, H=12 is roughly tied with the optimum H=24 (no
+significant difference at $p > 0.2$) but slightly lower-mean, suggesting
+that the 12-anchor variance estimate is the noisier of the two without
+gaining anything from the larger recency weight $\lambda^{12} \approx 0.89$
+vs $\lambda^{24} \approx 0.79$. Going below H=12 (e.g. H=6) would
+risk degenerating into something close to single-step error, since the
+variance estimate has too few participating predictions per timestep.
+We did not sweep below H=12.
 
 ## Outputs
 
