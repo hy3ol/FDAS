@@ -1,0 +1,22 @@
+\documentclass[border=2pt]{standalone}
+
+\usepackage{booktabs}
+\usepackage{graphicx}
+
+\begin{document}
+
+\renewcommand{\arraystretch}{1.1}
+\setlength{\tabcolsep}{6pt}
+\small
+
+\begin{tabular}{l|c|cccccc}
+\toprule
+\textbf{Horizon $H$} & \textbf{$n_\textrm{ok}$} & \textbf{AUC-PR} & \textbf{AUC-ROC} & \textbf{VUS-PR} & \textbf{VUS-ROC} & \textbf{Standard-F1} & \textbf{PA-F1} \\
+\midrule
+\textbf{$H=96$ (production)}  & 200 & \textbf{0.2369} & \textbf{0.6854} & \textbf{0.3028} & \textbf{0.7456} & \textbf{0.3200} & \textbf{0.6112} \\
+\textbf{$H=192$}  & 200 & 0.2099 & 0.6668 & 0.2673 & 0.7222 & 0.2961 & 0.5696 \\
+\textbf{$H=336$}  & 173 & 0.2043 & 0.6732 & 0.2149 & 0.6948 & 0.2918 & 0.5669 \\
+\bottomrule
+\end{tabular}
+
+\end{document}

@@ -67,3 +67,19 @@ results/00_result_table/*/*.log
 #   results/figures/                                — paper figures
 #   results/V13_RESULTS_REPORT.md
 #   results/V14_RESULTS_REPORT.md
+
+# Horizon ablation — predictions, scores, checkpoints, bundle metas are
+# intermediates (~581 GB total). Only aggregate CSVs + tables ship.
+ablations/results/horizon/H*/*/iTransformer/predictions_*.npy
+ablations/results/horizon/H*/*/iTransformer/scores.parquet
+ablations/results/horizon/H*/*/iTransformer/scores.csv
+ablations/results/horizon/H*/*/iTransformer/scores_per_ch.npz
+ablations/results/horizon/H*/*/iTransformer/test_labels.npy
+ablations/results/horizon/H*/*/iTransformer/inference_metadata.json
+ablations/results/horizon/H*/*/bundle_meta.json
+ablations/results/horizon/H*/models/
+ablations/results/horizon/H*/_logs/
+ablations/results/horizon/orchestrator.log
+# LaTeX intermediates (keep .tex/.pdf/.png only)
+ablations/results/table/*.aux
+ablations/results/table/*.log
