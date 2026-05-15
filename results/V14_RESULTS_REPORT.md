@@ -418,7 +418,7 @@ V13/
 │   │   └── metrics_tsb_format.csv   — TSB-AD-M 벤치 포맷 호환
 │   ├── V13_RESULTS_REPORT.md        — V13 vintage (test-only, 9 variant)
 │   └── V14_RESULTS_REPORT.md        — 이 문서 (full-series, 4-way agg)
-├── ablations/results/
+├── ablations/results/etc/
 │   └── ablation_zscore_agg_compare.csv  — V14 4-way agg 비교 결과
 └── models/{key}/checkpoint.pth      — best-snapshot (V14 동일 모델 사용)
 ```

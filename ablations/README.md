@@ -67,8 +67,9 @@ horizon ablation lives entirely under `ablations/scripts/horizon_ablation/`:
 ### Run
 
 ```bash
-# Full sweep (default --pred-lens 192 336). ~3-4 hours on a single GPU.
-python ablations/scripts/horizon_ablation/run_horizon_ablation.py
+# Default sweep is H ∈ {192, 336}; add 48 explicitly for the full grid.
+# ~3-4 hours on a single GPU; H=48 alone is ~90 min.
+python ablations/scripts/horizon_ablation/run_horizon_ablation.py --pred-lens 48 192 336
 
 # Single H, single dataset (smoke test)
 python ablations/scripts/horizon_ablation/run_horizon_ablation.py \
@@ -85,6 +86,7 @@ python ablations/scripts/horizon_ablation/aggregate.py
 
 ```
 ablations/results/horizon/
+├── H48/                                 — see H192/ layout
 ├── H192/
 │   ├── <key>/iTransformer/   (predictions_*.npy, scores.parquet, scores_per_ch.npz)
 │   ├── <key>/bundle_meta.json
@@ -94,7 +96,7 @@ ablations/results/horizon/
 ├── H336/                                — same layout
 ├── run_log.csv                          — (H × key) status + per-phase timing
 ├── per_dataset_metrics.csv              — (H × key) × 6 TSB-AD-M metrics
-├── summary.csv                          — H=96 ∪ H=192 ∪ H=336 long-format
+├── summary.csv                          — H ∈ {48, 96, 192, 336} long-format
 └── summary_aggregate.csv                — per-H mean/median + Wilcoxon vs H=96
 ```
 
@@ -103,15 +105,53 @@ ablations/results/horizon/
 Each split needs ≥ `L + H` consecutive timesteps. Datasets shorter than that
 in any of train/val/test are skipped with status `skip_too_short`.
 
-| H | required_span (= L+H) | fittable / 200 |
-|---|---|---|
-| 96 (production) | 288 | 200 |
-| 192 | 384 | 200 |
-| 336 | 528 | 174 (26 skipped — all `train_size=500` datasets) |
+| H | required_span (= L+H) | fittable / 200 | notes |
+|---|---|---|---|
+| **12** | 204 | 200 | |
+| **24** | 216 | 200 | |
+| **48** | 240 | 200 | |
+| 96 (production) | 288 | 200 | |
+| 192 | 384 | 200 | |
+| 336 | 528 | 173 | 26 `skip_too_short` (train_size=500 datasets); 1 `skip_oom` (SWaT\_id\_2: predictions tensor ~13 GB × 3 splits > 60 GB RAM). |
 
-The H=336 row in summary tables is computed over the 174-dataset subset; rows
+Per-H summary tables are computed over each $n_\textrm{ok}$ subset; rows
 are aligned by `dataset_key` so paired Wilcoxon vs H=96 in `summary_aggregate.csv`
 uses only datasets that succeeded at both H values.
+
+### Results — U-curve, peak at H=24
+
+Headline VUS-PR (micro-average across $n_\textrm{ok}$ datasets):
+
+| H | $n_\textrm{ok}$ | VUS-PR | Δ vs H=96 | paired Wilcoxon p | dataset win/loss vs H=96 |
+|---|:--:|---:|---:|---:|---:|
+| 12 | 200 | 0.3334 | +0.0305 | 1.6e-05 | 133 / 67 |
+| **24** | 200 | **0.3414** | **+0.0385** | 2.0e-09 | **142 / 58** |
+| 48 | 200 | 0.3243 | +0.0215 | 4.6e-07 | 135 / 65 |
+| 96 (production) | 200 | 0.3028 | — | — | — |
+| 192 | 200 | 0.2673 | −0.0355 | 3.8e-11 | 63 / 137 |
+| 336 | 173 | 0.2149 | −0.0592 | 4.0e-12 | 48 / 125 |
+
+**6 / 6 TSB-AD-M metrics form a U-curve with peak at H=24**. H=12 → H=24 →
+H=48 → H=96 → H=192 → H=336 is non-monotonic only at the very-short end:
+H=12 vs H=24 paired Wilcoxon is non-significant across all 6 metrics
+(p > 0.2 for all, $|\Delta\,\textrm{VUS-PR}| = 0.008$), so the
+recency-weighted multi-horizon variance is roughly *flat* between H=12
+and H=24 and then **decreases monotonically with H** beyond H=24.
+
+Conclusion: the current production choice of H=96 is suboptimal — **H=24
+yields +0.039 VUS-PR (≈ +13 % relative) with no extra inference cost,
+winning 142/200 paired datasets and beating H=96 on all 6 metrics at
+$p < 10^{-4}$**. The optimum sits between the "too short → not enough
+anchors for a meaningful per-step variance estimate" regime (H ≤ 12,
+recency weight $\lambda^H \gtrsim 0.89$ saturates) and the "too long →
+recency weighting collapses" regime (H ≥ 192, $\lambda^H \lesssim 0.15$).
+At H=24, $\lambda^{24} \approx 0.79$ — recency is still meaningfully
+emphasised, while 24 anchors per timestep give a reasonably-stable
+variance estimate.
+
+See `ablations/results/table/horizon_table_{1,2}.{tex,pdf,png}` for the
+paper-grade tables (overall 6-metric comparison + per-family VUS-PR
+breakdown across all six horizons).
 
 ### Methodological note
 
@@ -121,9 +161,18 @@ collapsing the recency-weighted variance to plain variance over a long horizon.
 H=336 (`λ^336 ≈ 0.034`) is already at the edge of the regime where recency
 weighting is meaningful at λ=0.99.
 
+At the short end, H=12 is roughly tied with the optimum H=24 (no
+significant difference at $p > 0.2$) but slightly lower-mean, suggesting
+that the 12-anchor variance estimate is the noisier of the two without
+gaining anything from the larger recency weight $\lambda^{12} \approx 0.89$
+vs $\lambda^{24} \approx 0.79$. Going below H=12 (e.g. H=6) would
+risk degenerating into something close to single-step error, since the
+variance estimate has too few participating predictions per timestep.
+We did not sweep below H=12.
+
 ## Outputs
 
-| CSV (under `./results/`) | Produced by | Schema notes |
+| CSV (under `./results/etc/`) | Produced by | Schema notes |
 |:--|:--|:--|
 | `agg_normalize_per_dataset.csv` | `compare_agg_normalize.py` | Per-dataset × 9 variants × 6 metrics. |
 | `agg_normalize_summary.csv` | `compare_agg_normalize.py` | Cross-dataset means + Wilcoxon. |
