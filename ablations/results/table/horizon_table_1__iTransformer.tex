@@ -1,10 +1,14 @@
-\documentclass[border=2pt]{standalone}
+\documentclass[border=2pt,varwidth=\maxdimen]{standalone}
 
 \usepackage{booktabs}
 \usepackage{graphicx}
+\usepackage{colortbl}
+\arrayrulecolor{black}
 
 \begin{document}
 
+\begin{center}
+\textbf{\large Horizon Ablation \textemdash\ iTransformer} \quad (overall metrics, $L=192$)\par\vspace{6pt}
 \renewcommand{\arraystretch}{1.1}
 \setlength{\tabcolsep}{6pt}
 \small
@@ -21,5 +25,6 @@
 \textbf{$H=336$}  & 173 & 0.2043 & 0.6732 & 0.2149 & 0.6948 & 0.2918 & 0.5669 \\
 \bottomrule
 \end{tabular}
+\end{center}
 
 \end{document}

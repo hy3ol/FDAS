@@ -87,10 +87,17 @@ class Model(nn.Module):
             mask = torch.ones(B, _TTM_CONTEXT_LEN, C,
                               device=device, dtype=x_enc.dtype)
 
+        # Some TTM-r2.x revisions (notably those picked by get_model for short
+        # prediction_length like 12/24/48) require an explicit `freq_token`
+        # encoder input. TSB-AD-M has no canonical frequency; we pass zeros
+        # (the model's "unknown frequency" slot), which is a no-op for older
+        # revisions that don't consume the token and unblocks the strict ones.
+        freq_token = torch.zeros(B, dtype=torch.long, device=device)
         with torch.no_grad():
             out = self.ttm(
                 past_values=past_values.float(),
                 past_observed_mask=mask,
+                freq_token=freq_token,
                 return_loss=False,
             )
         pred = out.prediction_outputs  # (B, H, C) already

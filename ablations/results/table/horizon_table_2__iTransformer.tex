@@ -1,10 +1,14 @@
-\documentclass[border=2pt]{standalone}
+\documentclass[border=2pt,varwidth=\maxdimen]{standalone}
 
 \usepackage{booktabs}
 \usepackage{graphicx}
+\usepackage{colortbl}
+\arrayrulecolor{black}
 
 \begin{document}
 
+\begin{center}
+\textbf{\large Horizon Ablation \textemdash\ iTransformer} \quad (per-family VUS-PR, $L=192$)\par\vspace{6pt}
 \renewcommand{\arraystretch}{1.1}
 \setlength{\tabcolsep}{3pt}
 \footnotesize
@@ -21,5 +25,6 @@
 \textbf{$H=336$} & 0.332 & -- & 0.103 & 0.559 & 0.113 & 0.010 & 0.060 & 0.321 & \textbf{0.170} & 0.221 & \textbf{0.160} & 0.124 & 0.173 & 0.182 & 0.132 & \textbf{0.315} & -- \\
 \bottomrule
 \end{tabular}
+\end{center}
 
 \end{document}

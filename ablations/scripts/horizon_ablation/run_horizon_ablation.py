@@ -54,16 +54,16 @@ from artifact_paths import (  # noqa: E402
 )
 
 ABLATION_ROOT = _REPO_ROOT / "ablations" / "results" / "horizon"
-BACKBONE = "iTransformer"
+DEFAULT_BACKBONE = "iTransformer"
 LOOKBACK = 192
 
 RUN_LOG_COLUMNS = [
-    "pred_len", "dataset_key", "status", "phase",
+    "pred_len", "backbone", "dataset_key", "status", "phase",
     "train_sec", "infer_sec", "score_sec", "metric_sec",
     "elapsed_sec", "error",
 ]
 METRIC_COLUMNS = [
-    "pred_len", "dataset_key", "family",
+    "pred_len", "backbone", "dataset_key", "family",
     "vus_pr", "vus_roc", "auc_pr", "auc_roc", "standard_f1", "pa_f1",
     "normal_mse", "normal_mae",
     "n_eval_rows", "status", "error",
@@ -82,8 +82,8 @@ def _move(src: Path, dst: Path) -> None:
 
 
 # ── Production artifact backup/restore ───────────────────────────────────
-# 02_train.py / 03_inference.py write into production models/<key>/iTransformer/
-# and results/<key>/iTransformer/. Running the ablation with a different pred_len
+# 02_train.py / 03_inference.py write into production models/<key>/<backbone>/
+# and results/<key>/<backbone>/. Running the ablation with a different pred_len
 # overwrites these singletons. We rename the existing (H=96) artifacts to
 # `<name>.h96.bak` before training, then rename them back AFTER the H≠96
 # artifacts have been moved into the ablation tree. The production H=96
@@ -98,24 +98,24 @@ def _bak_path(p: Path) -> Path:
     return p.with_name(p.name + _BAK_SUFFIX)
 
 
-def _backup_prod_iTransformer(dataset_key: str) -> None:
-    """Rename production iTransformer artifacts out of the way so 02/03
+def _backup_prod_artifacts(dataset_key: str, backbone: str) -> None:
+    """Rename production <backbone> artifacts out of the way so 02/03
     can write fresh ones without destroying the H=96 paper-grade outputs."""
     for prod in (
-        PROD_MODELS_ROOT / dataset_key / BACKBONE,
-        PROD_RESULTS_ROOT / dataset_key / BACKBONE,
+        PROD_MODELS_ROOT / dataset_key / backbone,
+        PROD_RESULTS_ROOT / dataset_key / backbone,
     ):
         bak = _bak_path(prod)
         if prod.exists() and not bak.exists():
             prod.rename(bak)
 
 
-def _restore_prod_iTransformer(dataset_key: str) -> None:
-    """Inverse of _backup_prod_iTransformer. Called AFTER the orchestrator
+def _restore_prod_artifacts(dataset_key: str, backbone: str) -> None:
+    """Inverse of _backup_prod_artifacts. Called AFTER the orchestrator
     has moved the newly trained H≠96 artifacts to the ablation tree."""
     for prod in (
-        PROD_MODELS_ROOT / dataset_key / BACKBONE,
-        PROD_RESULTS_ROOT / dataset_key / BACKBONE,
+        PROD_MODELS_ROOT / dataset_key / backbone,
+        PROD_RESULTS_ROOT / dataset_key / backbone,
     ):
         bak = _bak_path(prod)
         if bak.exists():
@@ -139,14 +139,14 @@ def _run_subprocess(cmd: list[str], log_path: Path) -> tuple[int, float]:
     return proc.returncode, time.time() - t0
 
 
-def _checkpoint_exists(pred_len: int, dataset_key: str) -> bool:
+def _checkpoint_exists(pred_len: int, dataset_key: str, backbone: str) -> bool:
     return (
-        _h_root(pred_len) / "models" / dataset_key / BACKBONE / "best_model.pth"
+        _h_root(pred_len) / "models" / dataset_key / backbone / "best_model.pth"
     ).exists()
 
 
-def _scores_exist(pred_len: int, dataset_key: str) -> bool:
-    out_dir = _h_root(pred_len) / dataset_key / BACKBONE
+def _scores_exist(pred_len: int, dataset_key: str, backbone: str) -> bool:
+    out_dir = _h_root(pred_len) / dataset_key / backbone
     return (out_dir / "scores.parquet").exists() or (out_dir / "scores.csv").exists()
 
 
@@ -155,18 +155,21 @@ def run_one(
     dataset_key: str,
     batch_size: int | None,
     skip_existing: bool,
+    backbone: str,
 ) -> tuple[dict, dict]:
     """Returns (log_row, metric_row). metric_row may be empty on early-skip."""
     h_root = _h_root(pred_len)
     h_root.mkdir(parents=True, exist_ok=True)
-    log_path = h_root / f"_logs/{dataset_key}.log"
+    log_path = h_root / f"_logs/{backbone}/{dataset_key}.log"
     t_all = time.time()
 
     log_row = {col: "" for col in RUN_LOG_COLUMNS}
-    log_row.update({"pred_len": pred_len, "dataset_key": dataset_key,
+    log_row.update({"pred_len": pred_len, "backbone": backbone,
+                    "dataset_key": dataset_key,
                     "status": "ok", "phase": "init"})
     metric_row = {col: "" for col in METRIC_COLUMNS}
-    metric_row.update({"pred_len": pred_len, "dataset_key": dataset_key})
+    metric_row.update({"pred_len": pred_len, "backbone": backbone,
+                       "dataset_key": dataset_key})
 
     # ── Split ──
     log_row["phase"] = "split"
@@ -181,34 +184,34 @@ def run_one(
         return log_row, metric_row
 
     # Decide if we can skip training/inference (artifacts already present).
-    artifacts_dir = h_root / dataset_key / BACKBONE
+    artifacts_dir = h_root / dataset_key / backbone
     have_inference = (artifacts_dir / "predictions_test.npy").exists() \
         and (artifacts_dir / "predictions_train.npy").exists()
-    have_checkpoint = _checkpoint_exists(pred_len, dataset_key)
+    have_checkpoint = _checkpoint_exists(pred_len, dataset_key, backbone)
 
     if not (skip_existing and have_inference):
         # ── data/ + bundle_meta materialization ──
         write_data_dir(split)
         write_bundle_meta(split, h_root / dataset_key / "bundle_meta.json")
 
-        # ── Back up production H=96 iTransformer artifacts so 02/03 don't
-        # destroy them. The try/finally guarantees the .h96.bak directories
-        # are renamed back even if 02 or 03 fails mid-run. ──
-        _backup_prod_iTransformer(dataset_key)
+        # ── Back up production H=96 artifacts so 02/03 don't destroy them.
+        # The try/finally guarantees the .h96.bak directories are renamed
+        # back even if 02 or 03 fails mid-run. ──
+        _backup_prod_artifacts(dataset_key, backbone)
         try:
             # ── 02_train ──
             log_row["phase"] = "train"
             if skip_existing and have_checkpoint:
                 log_row["train_sec"] = 0.0
                 # Stage saved checkpoint into prod location so 03 finds it.
-                saved = h_root / "models" / dataset_key / BACKBONE
-                prod_target = PROD_MODELS_ROOT / dataset_key / BACKBONE
+                saved = h_root / "models" / dataset_key / backbone
+                prod_target = PROD_MODELS_ROOT / dataset_key / backbone
                 if prod_target.exists():
                     shutil.rmtree(prod_target)
                 prod_target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copytree(saved, prod_target)
             else:
-                cmd = [sys.executable, "scripts/02_train.py", "--backbone", BACKBONE]
+                cmd = [sys.executable, "scripts/02_train.py", "--backbone", backbone]
                 if batch_size is not None:
                     cmd += ["--batch-size", str(batch_size)]
                 rc, elapsed = _run_subprocess(cmd, log_path)
@@ -219,7 +222,7 @@ def run_one(
 
             # ── 03_inference ──
             log_row["phase"] = "infer"
-            cmd = [sys.executable, "scripts/03_inference.py", "--backbone", BACKBONE]
+            cmd = [sys.executable, "scripts/03_inference.py", "--backbone", backbone]
             if batch_size is not None:
                 cmd += ["--batch-size", str(batch_size)]
             rc, elapsed = _run_subprocess(cmd, log_path)
@@ -230,24 +233,24 @@ def run_one(
 
             # ── Move newly trained H≠96 artifacts into ablation tree.
             # H=96 originals are still safe under <name>.h96.bak. ──
-            prod_models = PROD_MODELS_ROOT / dataset_key / BACKBONE
-            prod_results = PROD_RESULTS_ROOT / dataset_key / BACKBONE
-            ab_models = h_root / "models" / dataset_key / BACKBONE
-            ab_results = h_root / dataset_key / BACKBONE
+            prod_models = PROD_MODELS_ROOT / dataset_key / backbone
+            prod_results = PROD_RESULTS_ROOT / dataset_key / backbone
+            ab_models = h_root / "models" / dataset_key / backbone
+            ab_results = h_root / dataset_key / backbone
             if prod_models.exists():
                 _move(prod_models, ab_models)
             if prod_results.exists():
                 _move(prod_results, ab_results)
         finally:
-            _restore_prod_iTransformer(dataset_key)
+            _restore_prod_artifacts(dataset_key, backbone)
 
     # ── 04_score ──
     log_row["phase"] = "score"
-    if skip_existing and _scores_exist(pred_len, dataset_key):
+    if skip_existing and _scores_exist(pred_len, dataset_key, backbone):
         log_row["score_sec"] = 0.0
     else:
         t0 = time.time()
-        s_rec = compute_scores(dataset_key, LOOKBACK, pred_len, h_root, BACKBONE)
+        s_rec = compute_scores(dataset_key, LOOKBACK, pred_len, h_root, backbone)
         log_row["score_sec"] = round(time.time() - t0, 1)
         if s_rec["status"] != "ok":
             log_row.update({"status": "fail", "error": f"04: {s_rec.get('error', '')}"})
@@ -256,7 +259,7 @@ def run_one(
     # ── 05_metrics ──
     log_row["phase"] = "metric"
     t0 = time.time()
-    m_rec = compute_metrics(dataset_key, pred_len, h_root, BACKBONE)
+    m_rec = compute_metrics(dataset_key, pred_len, h_root, backbone)
     log_row["metric_sec"] = round(time.time() - t0, 1)
     if m_rec.get("status") not in ("ok", ""):
         log_row.update({"status": "fail",
@@ -284,6 +287,11 @@ def run_one(
 
 def main():
     parser = argparse.ArgumentParser(description="Horizon ablation orchestrator")
+    parser.add_argument("--backbone", type=str, default=DEFAULT_BACKBONE,
+                        help=f"Backbone name (registered in model.BACKBONES). "
+                             f"Default: {DEFAULT_BACKBONE}. For zero-shot backbones "
+                             f"(TTM, Moirai, TimesFM), 02_train just writes a metadata "
+                             f"stub — full run is fast since training is skipped.")
     parser.add_argument("--pred-lens", type=int, nargs="+", default=[192, 336],
                         help="Prediction horizons to sweep. Default: 192 336.")
     parser.add_argument("--only", type=str, nargs="*", default=None,
@@ -293,6 +301,7 @@ def main():
     parser.add_argument("--batch-size", type=int, default=None,
                         help="Override batch size for 02/03.")
     args = parser.parse_args()
+    backbone = args.backbone
 
     all_keys = list_available_dataset_keys()
     if args.only:
@@ -309,22 +318,24 @@ def main():
     metric_rows: list[dict] = []
 
     for H in args.pred_lens:
-        print(f"\n========== H={H}  ({len(keys)} candidate datasets) ==========")
+        print(f"\n========== {backbone} H={H}  ({len(keys)} candidate datasets) ==========")
         h_root = _h_root(H)
         h_root.mkdir(parents=True, exist_ok=True)
         for i, k in enumerate(keys, 1):
-            print(f"[H={H}] ({i}/{len(keys)}) {k}", flush=True)
+            print(f"[{backbone} H={H}] ({i}/{len(keys)}) {k}", flush=True)
             try:
-                log_row, metric_row = run_one(H, k, args.batch_size, args.skip_existing)
+                log_row, metric_row = run_one(
+                    H, k, args.batch_size, args.skip_existing, backbone,
+                )
             except KeyboardInterrupt:
                 raise
             except Exception as exc:
                 log_row = {col: "" for col in RUN_LOG_COLUMNS}
-                log_row.update({"pred_len": H, "dataset_key": k,
+                log_row.update({"pred_len": H, "backbone": backbone, "dataset_key": k,
                                 "status": "fail",
                                 "error": f"orchestrator: {type(exc).__name__}: {exc}"})
                 metric_row = {col: "" for col in METRIC_COLUMNS}
-                metric_row.update({"pred_len": H, "dataset_key": k,
+                metric_row.update({"pred_len": H, "backbone": backbone, "dataset_key": k,
                                    "status": "fail", "error": log_row["error"]})
             log_rows.append(log_row)
             metric_rows.append(metric_row)
@@ -344,6 +355,12 @@ def main():
             _write_csv(h_root / "per_dataset_metrics.csv",
                        [r for r in metric_merged if str(r.get("pred_len")) == str(H)],
                        METRIC_COLUMNS)
+            # Backbone-specific per-H slice for convenience
+            _write_csv(h_root / f"per_dataset_metrics__{backbone}.csv",
+                       [r for r in metric_merged
+                        if str(r.get("pred_len")) == str(H)
+                        and str(r.get("backbone")) == backbone],
+                       METRIC_COLUMNS)
 
     print(f"\nDone. Logs: {ABLATION_ROOT / 'run_log.csv'}")
     print(f"      Metrics: {ABLATION_ROOT / 'per_dataset_metrics.csv'}")
@@ -358,21 +375,32 @@ def _write_csv(path: Path, rows: list[dict], cols: list[str]) -> None:
 
 
 def _merge_existing(path: Path, new_rows: list[dict], cols: list[str]) -> list[dict]:
-    """Merge new rows into any existing CSV, keyed by (pred_len, dataset_key).
+    """Merge new rows into any existing CSV, keyed by (pred_len, backbone, dataset_key).
 
-    Lets a killed/resumed run preserve previously-completed (H, key) results
-    rather than truncating the CSV to the current invocation's iterations.
-    The newest row for a given (H, key) wins, so successful re-runs overwrite
-    stale failures.
+    Lets a killed/resumed run preserve previously-completed (H, backbone, key)
+    results rather than truncating the CSV to the current invocation's iterations.
+    The newest row for a given key wins, so successful re-runs overwrite stale
+    failures. The 3-key form keeps iTransformer and TTM (and any future backbone)
+    rows from colliding at the same (H, dataset).
+
+    Legacy CSV rows without a `backbone` column are imported as
+    backbone='iTransformer' to keep the pre-multi-backbone runs intact.
     """
     if not path.exists():
         return new_rows
     keep: list[dict] = []
-    new_keys = {(str(r.get("pred_len", "")), str(r.get("dataset_key", "")))
-                for r in new_rows}
+    new_keys = {
+        (str(r.get("pred_len", "")), str(r.get("backbone", "")),
+         str(r.get("dataset_key", "")))
+        for r in new_rows
+    }
     with open(path) as f:
         for row in csv.DictReader(f):
-            key = (str(row.get("pred_len", "")), str(row.get("dataset_key", "")))
+            # Backfill backbone for rows written before --backbone was introduced.
+            if not row.get("backbone"):
+                row["backbone"] = "iTransformer"
+            key = (str(row.get("pred_len", "")), str(row.get("backbone", "")),
+                   str(row.get("dataset_key", "")))
             if key in new_keys:
                 continue
             keep.append({c: row.get(c, "") for c in cols})

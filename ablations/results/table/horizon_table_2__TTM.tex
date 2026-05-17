@@ -1,0 +1,29 @@
+\documentclass[border=2pt,varwidth=\maxdimen]{standalone}
+
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{colortbl}
+\arrayrulecolor{black}
+
+\begin{document}
+
+\begin{center}
+\textbf{\large Horizon Ablation \textemdash\ TTM-r2} \quad (per-family VUS-PR, $L=192$)\par\vspace{6pt}
+\renewcommand{\arraystretch}{1.1}
+\setlength{\tabcolsep}{3pt}
+\footnotesize
+
+\begin{tabular}{l|ccccccccccccccccc}
+\toprule
+\textbf{Horizon $H$} & \textbf{CATSv2} & \textbf{CreditCard} & \textbf{Daphnet} & \textbf{Exathlon} & \textbf{GECCO} & \textbf{GHL} & \textbf{Genesis} & \textbf{LTDB} & \textbf{MITDB} & \textbf{MSL} & \textbf{OPP} & \textbf{PSM} & \textbf{SMAP} & \textbf{SMD} & \textbf{SVDB} & \textbf{SWaT} & \textbf{TAO} \\
+\midrule
+\textbf{$H=12$} & \textbf{0.187} & 0.059 & \textbf{0.341} & \textbf{0.833} & \textbf{0.550} & \textbf{0.026} & 0.243 & 0.270 & 0.051 & 0.203 & 0.104 & \textbf{0.159} & 0.249 & 0.375 & 0.126 & \textbf{0.440} & \textbf{0.917} \\
+\textbf{$H=24$} & 0.168 & 0.044 & 0.307 & 0.815 & 0.456 & 0.026 & \textbf{0.274} & 0.342 & 0.076 & 0.312 & 0.105 & 0.123 & 0.284 & \textbf{0.381} & 0.184 & 0.411 & 0.899 \\
+\textbf{$H=48$} & 0.166 & 0.039 & 0.284 & 0.789 & 0.291 & 0.026 & 0.230 & \textbf{0.440} & 0.124 & 0.386 & 0.110 & 0.115 & \textbf{0.330} & 0.366 & \textbf{0.253} & 0.393 & 0.892 \\
+\textbf{$H=96$} & 0.146 & \textbf{0.061} & 0.192 & 0.763 & 0.159 & 0.026 & 0.112 & 0.355 & 0.164 & \textbf{0.401} & 0.121 & 0.116 & 0.309 & 0.338 & 0.216 & 0.377 & 0.875 \\
+\textbf{$H=192$} & 0.140 & 0.038 & 0.124 & 0.671 & 0.120 & 0.020 & 0.018 & 0.355 & \textbf{0.187} & 0.293 & \textbf{0.140} & 0.098 & 0.283 & 0.300 & 0.223 & 0.303 & 0.840 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\end{document}
