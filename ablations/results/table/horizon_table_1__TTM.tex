@@ -1,0 +1,29 @@
+\documentclass[border=2pt,varwidth=\maxdimen]{standalone}
+
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{colortbl}
+\arrayrulecolor{black}
+
+\begin{document}
+
+\begin{center}
+\textbf{\large Horizon Ablation \textemdash\ TTM-r2} \quad (overall metrics, $L=192$)\par\vspace{6pt}
+\renewcommand{\arraystretch}{1.1}
+\setlength{\tabcolsep}{6pt}
+\small
+
+\begin{tabular}{l|c|cccccc}
+\toprule
+\textbf{Horizon $H$} & \textbf{$n_\textrm{ok}$} & \textbf{AUC-PR} & \textbf{AUC-ROC} & \textbf{VUS-PR} & \textbf{VUS-ROC} & \textbf{Standard-F1} & \textbf{PA-F1} \\
+\midrule
+\textbf{$H=12$}  & 200 & 0.2558 & 0.6635 & 0.3170 & 0.7257 & 0.3030 & \textbf{0.6141} \\
+\textbf{$H=24$}  & 200 & 0.2783 & 0.6728 & 0.3383 & 0.7321 & 0.3300 & 0.6038 \\
+\textbf{$H=48$}  & 200 & \textbf{0.2965} & 0.6835 & \textbf{0.3598} & 0.7401 & \textbf{0.3534} & 0.5949 \\
+\textbf{$H=96$ (production)}  & 200 & 0.2805 & \textbf{0.6876} & 0.3432 & \textbf{0.7434} & 0.3474 & 0.5957 \\
+\textbf{$H=192$}  & 200 & 0.2584 & 0.6754 & 0.3128 & 0.7276 & 0.3378 & 0.5723 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\end{document}

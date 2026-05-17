@@ -1,15 +1,14 @@
-"""Aggregate the horizon ablation results.
+"""Aggregate the horizon ablation results (multi-backbone).
 
 Reads:
-  - results/04_metrics/iTransformer/per_dataset_metrics.csv   (production H=96)
-  - ablations/results/horizon/per_dataset_metrics.csv         (ablation H=192, 336)
+  - ablations/results/horizon/per_dataset_metrics.csv  (all backbones, all H ablation rows)
+  - results/04_metrics/<backbone>/per_dataset_metrics.csv  (production H=96, per backbone)
 
 Writes:
   - ablations/results/horizon/summary.csv
-        long-format: (dataset_key × H) × 6 TSB-AD-M metrics + family + status
+        long-format: (backbone × dataset_key × H) × 6 TSB-AD-M metrics + family + status
   - ablations/results/horizon/summary_aggregate.csv
-        per-H mean / median + paired Wilcoxon signed-rank vs H=96 (where both
-        runs succeeded). Headline numbers for the ablation paragraph.
+        per-(backbone, H) mean/median + paired Wilcoxon vs H=96 (within-backbone)
 """
 from __future__ import annotations
 
@@ -23,95 +22,112 @@ _HERE = Path(__file__).resolve().parent
 _REPO_ROOT = _HERE.parents[2]
 sys.path.insert(0, str(_REPO_ROOT / "scripts"))
 
-PROD_METRICS = _REPO_ROOT / "results" / "04_metrics" / "iTransformer" / "per_dataset_metrics.csv"
+PROD_METRICS_ROOT = _REPO_ROOT / "results" / "04_metrics"
 ABL_METRICS = _REPO_ROOT / "ablations" / "results" / "horizon" / "per_dataset_metrics.csv"
 OUT_DIR = _REPO_ROOT / "ablations" / "results" / "horizon"
 
 METRIC_KEYS = ["vus_pr", "vus_roc", "auc_pr", "auc_roc", "standard_f1", "pa_f1"]
 
 
-def _load_h96() -> pd.DataFrame:
-    if not PROD_METRICS.exists():
-        return pd.DataFrame(columns=["dataset_key", "pred_len", "family",
-                                     *METRIC_KEYS, "status"])
-    df = pd.read_csv(PROD_METRICS)
+def _load_production_h96(backbone: str) -> pd.DataFrame:
+    """Pull production H=96 for a given backbone (if available)."""
+    path = PROD_METRICS_ROOT / backbone / "per_dataset_metrics.csv"
+    if not path.exists():
+        return pd.DataFrame()
+    df = pd.read_csv(path)
     out = pd.DataFrame({
-        "dataset_key":  df["dataset_id"],
         "pred_len":     96,
-        "family":       df["family"],
-        "vus_pr":       df["vus_pr_D_w_z"],
-        "vus_roc":      df["vus_roc_D_w_z"],
-        "auc_pr":       df["auc_pr_D_w_z"],
-        "auc_roc":      df["auroc_D_w_z"],
-        "standard_f1":  df["standard_f1_D_w_z"],
-        "pa_f1":        df["pa_f1_D_w_z"],
-        "status":       df["status"],
+        "backbone":     backbone,
+        "dataset_key":  df.get("dataset_id", df.get("dataset_key", pd.Series())),
+        "family":       df.get("family", ""),
+        "vus_pr":       df.get("vus_pr_D_w_z", np.nan),
+        "vus_roc":      df.get("vus_roc_D_w_z", np.nan),
+        "auc_pr":       df.get("auc_pr_D_w_z", np.nan),
+        "auc_roc":      df.get("auroc_D_w_z", np.nan),
+        "standard_f1":  df.get("standard_f1_D_w_z", np.nan),
+        "pa_f1":        df.get("pa_f1_D_w_z", np.nan),
+        "status":       df.get("status", "ok"),
     })
     return out
 
 
 def _load_ablation() -> pd.DataFrame:
     if not ABL_METRICS.exists():
-        return pd.DataFrame(columns=["dataset_key", "pred_len", "family",
+        return pd.DataFrame(columns=["pred_len", "backbone", "dataset_key", "family",
                                      *METRIC_KEYS, "status"])
     df = pd.read_csv(ABL_METRICS)
-    keep = ["pred_len", "dataset_key", "family",
+    if "backbone" not in df.columns:
+        df["backbone"] = "iTransformer"
+    df["backbone"] = df["backbone"].fillna("iTransformer")
+    keep = ["pred_len", "backbone", "dataset_key", "family",
             "vus_pr", "vus_roc", "auc_pr", "auc_roc",
             "standard_f1", "pa_f1", "status"]
     return df[keep]
 
 
 def build_summary() -> pd.DataFrame:
-    parts = [_load_h96(), _load_ablation()]
+    parts = [_load_ablation()]
+    # For every backbone seen in ablation OR present in production, pull H=96
+    abl = parts[0]
+    backbones_in_abl = set(abl["backbone"].dropna().unique().tolist()) if not abl.empty else set()
+    backbones_in_prod = {p.parent.name for p in PROD_METRICS_ROOT.glob("*/per_dataset_metrics.csv")}
+    for bb in sorted(backbones_in_abl | backbones_in_prod):
+        # Only pull production H=96 for backbones that don't already have H=96 in ablation
+        if not abl.empty and ((abl["backbone"] == bb) & (abl["pred_len"] == 96)).any():
+            continue
+        prod = _load_production_h96(bb)
+        if not prod.empty:
+            parts.append(prod)
+
     summary = pd.concat(parts, ignore_index=True)
-    summary = summary.sort_values(["dataset_key", "pred_len"]).reset_index(drop=True)
+    summary = summary.sort_values(
+        ["backbone", "dataset_key", "pred_len"]
+    ).reset_index(drop=True)
     return summary
 
 
 def build_aggregate(summary: pd.DataFrame) -> pd.DataFrame:
-    """Per-H mean/median + paired Wilcoxon vs H=96.
-
-    Paired test uses only datasets where BOTH H and H=96 produced status='ok'.
-    """
+    """Per-(backbone, H) mean/median + paired Wilcoxon vs H=96 within-backbone."""
     try:
         from scipy.stats import wilcoxon
     except Exception:
         wilcoxon = None
 
     rows: list[dict] = []
-    horizons = sorted(summary["pred_len"].dropna().unique().astype(int).tolist())
-    h96 = summary[summary["pred_len"] == 96].set_index("dataset_key")
-
-    for H in horizons:
-        sub = summary[(summary["pred_len"] == H) & (summary["status"] == "ok")].copy()
-        n_ok = len(sub)
-        row: dict = {"pred_len": int(H), "n_ok": int(n_ok)}
-        for m in METRIC_KEYS:
-            arr = pd.to_numeric(sub[m], errors="coerce").dropna().to_numpy()
-            row[f"{m}_mean"] = float(np.mean(arr)) if arr.size else np.nan
-            row[f"{m}_median"] = float(np.median(arr)) if arr.size else np.nan
-        if H != 96 and not h96.empty:
+    for bb in sorted(summary["backbone"].dropna().unique().tolist()):
+        sub_bb = summary[summary["backbone"] == bb].copy()
+        horizons = sorted(sub_bb["pred_len"].dropna().unique().astype(int).tolist())
+        h96 = sub_bb[sub_bb["pred_len"] == 96].set_index("dataset_key")
+        for H in horizons:
+            sub = sub_bb[(sub_bb["pred_len"] == H) & (sub_bb["status"] == "ok")].copy()
+            n_ok = len(sub)
+            row: dict = {"backbone": bb, "pred_len": int(H), "n_ok": int(n_ok)}
             for m in METRIC_KEYS:
-                paired = sub.set_index("dataset_key").join(
-                    h96[[m]], how="inner", lsuffix=f"_{H}", rsuffix="_96"
-                )
-                a = pd.to_numeric(paired[f"{m}_{H}"], errors="coerce")
-                b = pd.to_numeric(paired[f"{m}_96"], errors="coerce")
-                mask = a.notna() & b.notna()
-                a, b = a[mask].to_numpy(), b[mask].to_numpy()
-                row[f"{m}_delta_vs96_mean"] = (
-                    float(np.mean(a - b)) if a.size else np.nan
-                )
-                if wilcoxon is not None and a.size > 0 and not np.allclose(a, b):
-                    try:
-                        _, p = wilcoxon(a, b, zero_method="wilcox")
-                        row[f"{m}_wilcoxon_p"] = float(p)
-                    except Exception:
+                arr = pd.to_numeric(sub[m], errors="coerce").dropna().to_numpy()
+                row[f"{m}_mean"] = float(np.mean(arr)) if arr.size else np.nan
+                row[f"{m}_median"] = float(np.median(arr)) if arr.size else np.nan
+            if H != 96 and not h96.empty:
+                for m in METRIC_KEYS:
+                    paired = sub.set_index("dataset_key").join(
+                        h96[[m]], how="inner", lsuffix=f"_{H}", rsuffix="_96"
+                    )
+                    a = pd.to_numeric(paired[f"{m}_{H}"], errors="coerce")
+                    b = pd.to_numeric(paired[f"{m}_96"], errors="coerce")
+                    mask = a.notna() & b.notna()
+                    a, b = a[mask].to_numpy(), b[mask].to_numpy()
+                    row[f"{m}_delta_vs96_mean"] = (
+                        float(np.mean(a - b)) if a.size else np.nan
+                    )
+                    if wilcoxon is not None and a.size > 0 and not np.allclose(a, b):
+                        try:
+                            _, p = wilcoxon(a, b, zero_method="wilcox")
+                            row[f"{m}_wilcoxon_p"] = float(p)
+                        except Exception:
+                            row[f"{m}_wilcoxon_p"] = np.nan
+                    else:
                         row[f"{m}_wilcoxon_p"] = np.nan
-                else:
-                    row[f"{m}_wilcoxon_p"] = np.nan
-                row[f"{m}_n_paired"] = int(a.size)
-        rows.append(row)
+                    row[f"{m}_n_paired"] = int(a.size)
+            rows.append(row)
     return pd.DataFrame(rows)
 
 
@@ -124,7 +140,7 @@ def main():
     agg.to_csv(OUT_DIR / "summary_aggregate.csv", index=False)
     print(f"Wrote {OUT_DIR / 'summary_aggregate.csv'}  ({len(agg)} rows)")
     print("\nPreview:")
-    cols_preview = ["pred_len", "n_ok",
+    cols_preview = ["backbone", "pred_len", "n_ok",
                     "vus_pr_mean", "vus_roc_mean", "vus_pr_delta_vs96_mean",
                     "vus_pr_wilcoxon_p"]
     avail = [c for c in cols_preview if c in agg.columns]
